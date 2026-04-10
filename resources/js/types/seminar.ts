@@ -1,9 +1,9 @@
 export interface Participant {
     id: number;
     name: string;
-    email: string;
+    contact_number: string;
+    status: string;
     attended: boolean;
-    attended_at?: string; // Optional field
 }
 
 export interface Seminar {

@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\SeminarController;
 use App\Http\Controllers\AnnualReportsController;
+use App\Http\Controllers\BeneficiaryController;
+use App\Http\Controllers\MemberRegistrationController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Support\Facades\Route;
@@ -25,9 +27,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/reports/annual', [AnnualReportsController::class, 'index'])
         ->name('annual-reports.index');
 
-    Route::inertia('/loan/member-registration', 'Loan/MemberRegistration')
-        ->name('loan.member-registration');
-
     Route::get('/loan/seminar-tracking', [SeminarController::class, 'index'])
         ->name('loan.seminar-tracking');
 
@@ -39,6 +38,30 @@ Route::middleware(['auth'])->group(function () {
 
     Route::inertia('/loan/management', 'Loan/Management')
         ->name('loan.management');
+
+    // --- Member Registration ---
+    Route::get('/loan/member-registration', [MemberRegistrationController::class, 'index'])
+        ->name('loan.member-registration');
+    Route::get('/loan/member-registration/create', [MemberRegistrationController::class, 'create'])
+        ->name('loan.member-registration.create');
+    Route::post('/loan/member-registration', [MemberRegistrationController::class, 'store'])
+        ->name('loan.member-registration.store');
+    Route::get('/loan/member-registration/{memberRegistration}', [MemberRegistrationController::class, 'show'])
+        ->name('loan.member-registration.show');
+    Route::patch('/loan/member-registration/{memberRegistration}/assign-seminar', [MemberRegistrationController::class, 'assignSeminar'])
+        ->name('loan.member-registration.assign-seminar');
+    Route::patch('/loan/member-registration/{memberRegistration}/confirm-attendance', [MemberRegistrationController::class, 'confirmAttendance'])
+        ->name('loan.member-registration.confirm-attendance');
+    Route::patch('/loan/member-registration/{memberRegistration}/endorse-to-bod', [MemberRegistrationController::class, 'endorseToBod'])
+        ->name('loan.member-registration.endorse-to-bod');
+
+    // --- Beneficiaries (staff only) ---
+    Route::post('/loan/member-registration/{memberRegistration}/beneficiaries', [BeneficiaryController::class, 'store'])
+        ->name('loan.member-registration.beneficiaries.store');
+    Route::patch('/loan/member-registration/{memberRegistration}/beneficiaries/{beneficiary}', [BeneficiaryController::class, 'update'])
+        ->name('loan.member-registration.beneficiaries.update');
+    Route::delete('/loan/member-registration/{memberRegistration}/beneficiaries/{beneficiary}', [BeneficiaryController::class, 'destroy'])
+        ->name('loan.member-registration.beneficiaries.destroy');
 
     Route::inertia('/user/member-management', 'User/MemberManagement')
         ->name('user.member-management');
