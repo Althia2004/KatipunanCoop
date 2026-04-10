@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\SeminarController;
 use App\Http\Controllers\AnnualReportsController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
@@ -27,8 +28,14 @@ Route::middleware(['auth'])->group(function () {
     Route::inertia('/loan/member-registration', 'Loan/MemberRegistration')
         ->name('loan.member-registration');
 
-    Route::inertia('/loan/seminar-tracking', 'Loan/SeminarTracking')
+    Route::get('/loan/seminar-tracking', [SeminarController::class, 'index'])
         ->name('loan.seminar-tracking');
+
+    Route::get('/loan/seminar-tracking/create', [SeminarController::class, 'create'])
+        ->name('loan.seminar-tracking.create');
+
+    Route::post('loan/seminar-tracking', [SeminarController::class, 'store'])
+        ->name('loan.seminar-tracking.store');
 
     Route::inertia('/loan/management', 'Loan/Management')
         ->name('loan.management');

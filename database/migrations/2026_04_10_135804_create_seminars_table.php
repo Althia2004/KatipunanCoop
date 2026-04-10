@@ -16,8 +16,8 @@ return new class extends Migration
             $table->timestamps();
 
             $table->string("title");
-            $table->text('description');
-            $table->string('speaker_name');
+            $table->text('description')->nullable();
+            $table->string('speaker_name')->nullable();
 
             $table->dateTime('scheduled_at');
             $table->string('location');
