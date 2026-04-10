@@ -6,8 +6,8 @@ export default function SeminarCreate() {
         location: '',
         scheduled_at: '',
         capacity: 0,
-        speaker_name: '', // New field
-        description: '',  // New field
+        speaker_name: '', 
+        description: '',  
     });
 
     const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {

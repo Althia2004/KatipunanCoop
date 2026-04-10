@@ -11,7 +11,7 @@ interface ModalProps {
 export default function SeminarParticipantModal({ isOpen, onClose, seminar} : ModalProps) {
     if (!isOpen) return null;
 
-    // In a real app, 'participants' would come from your SQL relationship
+    // Temporary hard-coded participants model
     const participants = seminar.participants || [];
 
     return (

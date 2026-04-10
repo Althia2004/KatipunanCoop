@@ -10,14 +10,13 @@ interface SeminarPageProps {
 }
 
 export default function SeminarTracking({ seminarsFromDb }: SeminarPageProps) {
-    console.log("Check this:", seminarsFromDb);
     const [searchTerm, setSearchTerm] = useState('');
-    // Tip: Always type your state for objects/nulls to avoid TS errors later
+
     const [selectedSeminar, setSelectedSeminar] = useState<Seminar | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     // 1. Logic: Filter seminars based on search input
-    // This ensures your table updates as you type
+    // This ensures the table updates as you type
     const seminars = (seminarsFromDb || []).filter(s => 
         s.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         s.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
