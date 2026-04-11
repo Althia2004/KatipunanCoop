@@ -26,6 +26,10 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/reports/annual', [AnnualReportsController::class, 'index'])
         ->name('annual-reports.index');
+    Route::get('/reports/annual/{id}', [AnnualReportsController::class, 'show'])
+        ->name('annual-reports.show');
+    Route::patch('/reports/annual/{id}/pin', [AnnualReportsController::class, 'pin'])
+        ->name('annual-reports.pin');
 
     Route::get('/loan/seminar-tracking', [SeminarController::class, 'index'])
         ->name('loan.seminar-tracking');
