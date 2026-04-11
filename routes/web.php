@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\SeminarController;
 use App\Http\Controllers\AnnualReportsController;
 use App\Http\Controllers\BeneficiaryController;
@@ -17,7 +18,7 @@ Route::inertia('/', 'welcome', [
 Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
-        Route::inertia('dashboard', 'dashboard')->name('dashboard');
+        Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     });
 
 Route::middleware(['auth'])->group(function () {
