@@ -15,6 +15,16 @@ Route::inertia('/', 'welcome', [
     'canResetPassword' => Features::enabled(Features::resetPasswords()),
 ])->name('home');
 
+// ── Coming-Soon role-based dashboard placeholders ──
+Route::middleware(['auth'])->group(function () {
+    Route::inertia('/member/dashboard',     'ComingSoon', ['page' => 'Member Dashboard'])->name('member.dashboard');
+    Route::inertia('/admin/dashboard',      'ComingSoon', ['page' => 'Admin Dashboard'])->name('admin.dashboard');
+    Route::inertia('/manager/dashboard',    'ComingSoon', ['page' => 'Manager Dashboard'])->name('manager.dashboard');
+    Route::inertia('/board/dashboard',      'ComingSoon', ['page' => 'Board of Directors Dashboard'])->name('board.dashboard');
+    Route::inertia('/bookkeeper/dashboard', 'ComingSoon', ['page' => 'Bookkeeper Dashboard'])->name('bookkeeper.dashboard');
+    Route::inertia('/hr/dashboard',         'ComingSoon', ['page' => 'HR Manager Dashboard'])->name('hr.dashboard');
+});
+
 Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
