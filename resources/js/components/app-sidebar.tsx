@@ -29,9 +29,18 @@ import type { NavItem } from '@/types';
 
 export function AppSidebar() {
     const page = usePage();
-    const dashboardUrl = page.props.currentTeam
-        ? dashboard(page.props.currentTeam.slug)
-        : '/';
+    const { auth } = page.props;
+
+    let dashboardUrl: string;
+    if (auth?.user?.role === 'superadmin') {
+        dashboardUrl = '/superadmin/dashboard';
+    } else if (auth?.user?.role === 'admin') {
+        dashboardUrl = page.props.currentTeam
+            ? dashboard(page.props.currentTeam.slug)
+            : '/';
+    } else {
+        dashboardUrl = '/member/dashboard';
+    }
 
     const featureNavItems: NavItem[] = [
         {

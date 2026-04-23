@@ -32,4 +32,27 @@ class User extends Authenticatable
             'two_factor_confirmed_at' => 'datetime',
         ];
     }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    public function isSuperadmin(): bool
+    {
+        return $this->role === 'superadmin';
+    }
+
+    public function dashboardRouteName(): string
+    {
+        if ($this->isSuperadmin()) {
+            return 'superadmin.dashboard';
+        }
+
+        if ($this->isAdmin()) {
+            return 'dashboard';
+        }
+
+        return 'member.dashboard';
+    }
 }

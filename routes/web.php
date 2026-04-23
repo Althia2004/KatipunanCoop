@@ -19,6 +19,7 @@ Route::inertia('/', 'welcome', [
 Route::middleware(['auth'])->group(function () {
     Route::inertia('/member/dashboard',     'ComingSoon', ['page' => 'Member Dashboard'])->name('member.dashboard');
     Route::inertia('/admin/dashboard',      'ComingSoon', ['page' => 'Admin Dashboard'])->name('admin.dashboard');
+    Route::inertia('/superadmin/dashboard', 'ComingSoon', ['page' => 'Superadmin Dashboard'])->name('superadmin.dashboard');
     Route::inertia('/manager/dashboard',    'ComingSoon', ['page' => 'Manager Dashboard'])->name('manager.dashboard');
     Route::inertia('/board/dashboard',      'ComingSoon', ['page' => 'Board of Directors Dashboard'])->name('board.dashboard');
     Route::inertia('/bookkeeper/dashboard', 'ComingSoon', ['page' => 'Bookkeeper Dashboard'])->name('bookkeeper.dashboard');
