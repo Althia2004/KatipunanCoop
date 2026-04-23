@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\LoanManagementController;
 use App\Http\Controllers\SeminarController;
 use App\Http\Controllers\AnnualReportsController;
 use App\Http\Controllers\BeneficiaryController;
@@ -52,7 +53,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('loan/seminar-tracking', [SeminarController::class, 'store'])
         ->name('loan.seminar-tracking.store');
 
-    Route::inertia('/loan/management', 'Loan/Management')
+    Route::get('/loan/management', [LoanManagementController::class, 'index'])
         ->name('loan.management');
 
     // --- Member Registration ---
