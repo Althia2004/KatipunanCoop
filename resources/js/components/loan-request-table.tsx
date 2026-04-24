@@ -207,18 +207,34 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
                                 >
                                     Close
                                 </button>
-                                {isSuperadmin && activeRequest.status === 'pending' && parseFloat(activeRequest.amount) < 50000 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            router.patch(`/loan/request/${activeRequest.id}/approve`, {
-                                                onSuccess: () => setActiveRequest(null),
-                                            });
-                                        }}
-                                        className="inline-flex justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700 transition"
-                                    >
-                                        Approve Request
-                                    </button>
+                                {isSuperadmin && activeRequest.status === 'pending' && (
+                                    (() => {
+                                        const approvedMode = Number(activeRequest.amount) <= 50000;
+                                        const buttonLabel = approvedMode ? 'Approve Request' : 'For BOD Approval';
+                                        const nextStatus = approvedMode ? 'approved' : 'for_bod_approval';
+
+                                        return (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setActiveRequest({ ...activeRequest, status: nextStatus } as LoanRequest);
+                                                    router.patch(
+                                                        `/loan/request/${activeRequest.id}/approve`,
+                                                        {},
+                                                        {
+                                                            preserveScroll: true,
+                                                            onError: () => setActiveRequest(activeRequest),
+                                                        }
+                                                    );
+                                                }}
+                                                className={`inline-flex justify-center rounded-xl px-5 py-3 text-sm font-semibold text-white transition ${
+                                                    approvedMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-600 hover:bg-sky-700'
+                                                }`}
+                                            >
+                                                {buttonLabel}
+                                            </button>
+                                        );
+                                    })()
                                 )}
                             </div>
                         </div>

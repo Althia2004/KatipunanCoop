@@ -50,10 +50,13 @@ class LoanManagementController extends Controller
 
         abort_unless($user?->isSuperadmin(), 403);
         abort_unless($loanRequest->status === LoanRequest::STATUS_PENDING, 403);
-        abort_unless((float) $loanRequest->amount < 50000, 403);
+
+        $status = (float) $loanRequest->amount <= 50000
+            ? LoanRequest::STATUS_APPROVED
+            : LoanRequest::STATUS_FOR_BOD_APPROVAL;
 
         $loanRequest->update([
-            'status' => LoanRequest::STATUS_APPROVED,
+            'status' => $status,
         ]);
 
         return redirect()->route('loan.management');
