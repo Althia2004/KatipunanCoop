@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, FolderGit2 } from 'lucide-react';
+import { Banknote, BookOpen, FolderGit2 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -18,7 +18,12 @@ import type { NavItem } from '@/types';
 export function AppMemberSidebar() {
     const dashboardUrl = '/member/dashboard';
 
-    const loanNavItems: NavItem[] = [];
+    const loanNavItems: NavItem[] = [
+        {
+            title: 'Loan Request',
+            href: '/loan/request',
+        },
+    ];
 
     const userNavItems: NavItem[] = [];
 

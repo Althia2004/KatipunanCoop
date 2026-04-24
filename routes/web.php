@@ -56,6 +56,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/loan/management', [LoanManagementController::class, 'index'])
         ->name('loan.management');
 
+    Route::post('/loan/request', [LoanManagementController::class, 'store'])
+        ->name('loan.request.store');
+
+    Route::inertia('/loan/request', 'Loan/Request')
+        ->name('loan.request');
+
     // --- Member Registration ---
     Route::get('/loan/member-registration', [MemberRegistrationController::class, 'index'])
         ->name('loan.member-registration');
