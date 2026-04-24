@@ -43,4 +43,19 @@ class LoanManagementController extends Controller
 
         return redirect()->route('loan.management');
     }
+
+    public function approve(LoanRequest $loanRequest)
+    {
+        $user = request()->user();
+
+        abort_unless($user?->isSuperadmin(), 403);
+        abort_unless($loanRequest->status === LoanRequest::STATUS_PENDING, 403);
+        abort_unless((float) $loanRequest->amount < 50000, 403);
+
+        $loanRequest->update([
+            'status' => LoanRequest::STATUS_APPROVED,
+        ]);
+
+        return redirect()->route('loan.management');
+    }
 }

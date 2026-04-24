@@ -56,6 +56,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/loan/management', [LoanManagementController::class, 'index'])
         ->name('loan.management');
 
+    Route::patch('/loan/request/{loanRequest}/approve', [LoanManagementController::class, 'approve'])
+        ->name('loan.request.approve');
+
     Route::post('/loan/request', [LoanManagementController::class, 'store'])
         ->name('loan.request.store');
 
