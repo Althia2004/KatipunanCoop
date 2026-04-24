@@ -32,13 +32,12 @@ class LoanManagementController extends Controller
     {
         $request->validate([
             'amount' => ['required', 'numeric', 'min:1'],
-            'requested_at' => ['required', 'date'],
         ]);
 
         LoanRequest::create([
             'amount' => $request->input('amount'),
             'requested_by' => $request->user()->id,
-            'requested_at' => $request->input('requested_at'),
+            'requested_at' => now()->toDateString(),
             'status' => LoanRequest::STATUS_PENDING,
         ]);
 

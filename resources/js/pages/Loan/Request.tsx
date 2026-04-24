@@ -4,7 +4,6 @@ import { Head, useForm } from '@inertiajs/react';
 export default function Request() {
     const { data, setData, post, processing, errors } = useForm({
         amount: '',
-        requested_at: '',
     });
 
     const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -38,23 +37,10 @@ export default function Request() {
                     {errors.amount && <p className="text-red-500 text-xs mt-1 font-medium">{errors.amount}</p>}
                 </div>
 
-                <div>
-                    <label className="block text-sm font-bold text-zinc-700 mb-1">Requested Date</label>
-                    <input
-                        type="date"
-                        value={data.requested_at}
-                        onChange={(e) => setData('requested_at', e.target.value)}
-                        className={`w-full text-zinc-900 bg-zinc-50 rounded-xl border-zinc-300 p-3 focus:ring-[#4c9f5f] focus:border-[#4c9f5f] transition-all ${
-                            errors.requested_at ? 'border-red-500 ring-1 ring-red-500' : ''
-                        }`}
-                    />
-                    {errors.requested_at && <p className="text-red-500 text-xs mt-1 font-medium">{errors.requested_at}</p>}
-                </div>
-
                 <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6">
                     <h2 className="text-lg font-semibold text-zinc-900">Loan request details</h2>
                     <p className="mt-2 text-sm text-zinc-600">
-                        Submit this loan request and it will be stored as a pending LoanRequest record for review.
+                        Submit this loan request and it will be stored as a pending LoanRequest record for review with today&apos;s submission date.
                     </p>
                 </div>
 
