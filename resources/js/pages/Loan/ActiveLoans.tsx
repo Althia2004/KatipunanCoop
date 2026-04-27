@@ -1,6 +1,15 @@
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 import { Banknote, Search, Filter, Users, CheckCircle2 } from 'lucide-react';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import type { Loan } from '@/types/loan';
 
 interface LoanActiveProps {
@@ -18,6 +27,7 @@ export default function ActiveLoans({ activeLoansFromDb }: LoanActiveProps) {
         loan.remaining_balance.toString().includes(searchTerm)
     );
 
+    const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
     const totalLoans = activeLoansFromDb.length;
     const totalPrincipal = activeLoansFromDb.reduce((sum, loan) => sum + parseFloat(loan.principal_amount), 0);
     const totalRemaining = activeLoansFromDb.reduce((sum, loan) => sum + parseFloat(loan.remaining_balance), 0);
@@ -91,6 +101,7 @@ export default function ActiveLoans({ activeLoansFromDb }: LoanActiveProps) {
                                 <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500">Remaining</th>
                                 <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500">Interest</th>
                                 <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">Status</th>
+                                <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-200 bg-white">
@@ -106,11 +117,20 @@ export default function ActiveLoans({ activeLoansFromDb }: LoanActiveProps) {
                                     <td className="px-6 py-4 text-sm text-right text-zinc-900">{loan.remaining_balance}</td>
                                     <td className="px-6 py-4 text-sm text-right text-zinc-900">{loan.interest_rate}%</td>
                                     <td className="px-6 py-4 text-sm text-zinc-700">{loan.status}</td>
+                                    <td className="px-6 py-4 text-right">
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedLoan(loan)}
+                                            className="inline-flex items-center rounded-xl bg-zinc-100 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-zinc-700 transition hover:bg-zinc-200"
+                                        >
+                                            View
+                                        </button>
+                                    </td>
                                 </tr>
                             ))}
                             {filteredLoans.length === 0 && (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-10 text-center text-sm text-zinc-500">
+                                    <td colSpan={8} className="px-6 py-10 text-center text-sm text-zinc-500">
                                         No active loans found.
                                     </td>
                                 </tr>
@@ -118,6 +138,67 @@ export default function ActiveLoans({ activeLoansFromDb }: LoanActiveProps) {
                         </tbody>
                     </table>
                 </div>
+
+                {selectedLoan && (
+                    <Dialog open={Boolean(selectedLoan)} onOpenChange={(open) => { if (!open) setSelectedLoan(null); }}>
+                        <DialogContent className="max-w-3xl">
+                            <DialogHeader>
+                                <DialogTitle>Loan #{selectedLoan.id} Details</DialogTitle>
+                                <DialogDescription>
+                                    Detailed information for this loan and borrower.
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <div className="space-y-6 py-4">
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+                                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Borrower</p>
+                                        <p className="mt-3 text-lg font-semibold text-zinc-900">{selectedLoan.member.name}</p>
+                                        <p className="text-sm text-zinc-500">{selectedLoan.member.email}</p>
+                                    </div>
+                                    <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+                                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Loan Request</p>
+                                        <p className="mt-3 text-lg font-semibold text-zinc-900">#{selectedLoan.loan_request_id}</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-4 sm:grid-cols-3">
+                                    <div className="rounded-3xl border border-zinc-200 bg-white p-5">
+                                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Principal Amount</p>
+                                        <p className="mt-3 text-2xl font-bold text-zinc-900">₱{Number(selectedLoan.principal_amount).toLocaleString()}</p>
+                                    </div>
+                                    <div className="rounded-3xl border border-zinc-200 bg-white p-5">
+                                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Remaining Balance</p>
+                                        <p className="mt-3 text-2xl font-bold text-zinc-900">₱{Number(selectedLoan.remaining_balance).toLocaleString()}</p>
+                                    </div>
+                                    <div className="rounded-3xl border border-zinc-200 bg-white p-5">
+                                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Interest Rate</p>
+                                        <p className="mt-3 text-2xl font-bold text-zinc-900">{selectedLoan.interest_rate}%</p>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Total Payable</p>
+                                    <p className="mt-3 text-xl font-semibold text-zinc-900">₱{Number(selectedLoan.total_payable).toLocaleString()}</p>
+                                    <p className="mt-2 text-sm text-zinc-500">Paid so far: ₱{(Number(selectedLoan.total_payable) - Number(selectedLoan.remaining_balance)).toLocaleString()}</p>
+                                </div>
+
+                                <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Status</p>
+                                    <p className="mt-3 text-lg font-semibold text-zinc-900 capitalize">{selectedLoan.status.replace(/_/g, ' ')}</p>
+                                </div>
+                            </div>
+
+                            <DialogFooter>
+                                <DialogClose asChild>
+                                    <button className="inline-flex justify-center rounded-xl border border-zinc-200 bg-white px-5 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition">
+                                        Close
+                                    </button>
+                                </DialogClose>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                )}
             </div>
         </>
     );
