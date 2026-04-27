@@ -21,7 +21,7 @@ export function AppMemberSidebar() {
     const loanNavItems: NavItem[] = [
         {
             title: 'Loan Request',
-            href: '/loan/request',
+            href: '/loan/management',
         },
     ];
 

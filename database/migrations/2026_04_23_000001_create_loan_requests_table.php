@@ -18,6 +18,8 @@ return new class extends Migration
                 ->cascadeOnDelete();
             $table->date('requested_at');
             $table->string('status')->default('pending');
+            $table->text('purpose')->nullable();
+            $table->integer('term_months')->default(12);
         });
     }
 
