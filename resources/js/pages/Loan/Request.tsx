@@ -4,6 +4,7 @@ import { Head, useForm } from '@inertiajs/react';
 export default function Request() {
     const { data, setData, post, processing, errors } = useForm({
         amount: '',
+        purpose: '',
     });
 
     const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -35,6 +36,19 @@ export default function Request() {
                         }`}
                     />
                     {errors.amount && <p className="text-red-500 text-xs mt-1 font-medium">{errors.amount}</p>}
+                </div>
+
+                <div>
+                    <label className="block text-sm font-bold text-zinc-700 mb-1">Purpose</label>
+                    <textarea
+                        value={data.purpose}
+                        placeholder="Explain why this loan is needed"
+                        onChange={(e) => setData('purpose', e.target.value)}
+                        className={`w-full text-zinc-900 bg-zinc-50 rounded-xl border-zinc-300 p-3 min-h-[120px] focus:ring-[#4c9f5f] focus:border-[#4c9f5f] transition-all ${
+                            errors.purpose ? 'border-red-500 ring-1 ring-red-500' : ''
+                        }`}
+                    />
+                    {errors.purpose && <p className="text-red-500 text-xs mt-1 font-medium">{errors.purpose}</p>}
                 </div>
 
                 <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6">

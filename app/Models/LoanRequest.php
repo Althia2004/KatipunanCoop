@@ -14,12 +14,15 @@ class LoanRequest extends Model
     const STATUS_PENDING = 'pending';
     const STATUS_FOR_BOD_APPROVAL = 'for_bod_approval';
     const STATUS_APPROVED = 'approved';
+    const STATUS_REJECTED = 'rejected';
 
     protected $fillable = [
         'amount',
         'requested_by',
         'requested_at',
         'status',
+        'purpose', // Recommended for BOD review
+        'term_months',
     ];
 
     protected $casts = [
