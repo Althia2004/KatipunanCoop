@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { Banknote, Search, Filter, CheckCircle2, Clock, Users } from 'lucide-react';
 import LoanRequestTable from '@/components/loan-request-table';
@@ -11,9 +11,12 @@ interface LoanManagementProps {
 }
 
 export default function Management({ loanRequestsFromDb }: LoanManagementProps) {
+    const { auth } = usePage().props as any;
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     
+    const isMember = auth.user.role === 'member';
+
     const filteredRequests = loanRequestsFromDb.filter((request) =>
         request.requested_by.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         request.requested_by.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -36,12 +39,14 @@ export default function Management({ loanRequestsFromDb }: LoanManagementProps) 
                         <h1 className="text-3xl font-bold text-[#2d4734]">Loan Requests</h1>
                         <p className="text-zinc-500 font-medium">Track loan requests and approval status for the loan workflow.</p>
                     </div>
-                    <button
+                    
+                    {isMember &&
+                    (<button
                         onClick={() => setIsModalOpen(true)}
                         className="flex items-center gap-2 px-5 py-2.5 bg-[#4c9f5f] text-white font-bold rounded-xl hover:bg-[#459245] transition"
                     >
                         <Plus className="w-4 h-4" /> New Request
-                    </button>
+                    </button>)}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

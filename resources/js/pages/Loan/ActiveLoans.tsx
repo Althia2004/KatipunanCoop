@@ -19,6 +19,15 @@ interface LoanActiveProps {
 export default function ActiveLoans({ activeLoansFromDb }: LoanActiveProps) {
     const [searchTerm, setSearchTerm] = useState('');
 
+    // --- CURRENCY FORMATTER HELPER ---
+    const formatPHP = (amount: number | string) => {
+        return new Intl.NumberFormat('en-PH', {
+            style: 'currency',
+            currency: 'PHP',
+            minimumFractionDigits: 2,
+        }).format(Number(amount));
+    };
+
     const filteredLoans = activeLoansFromDb.filter((loan) =>
         loan.member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         loan.member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -57,6 +66,7 @@ export default function ActiveLoans({ activeLoansFromDb }: LoanActiveProps) {
                     </div>
                 </div>
 
+                {/* STAT CARDS SECTION */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm">
                         <div className="flex items-center gap-4">
@@ -72,7 +82,7 @@ export default function ActiveLoans({ activeLoansFromDb }: LoanActiveProps) {
                             <div className="p-3 bg-blue-50 rounded-lg text-blue-600"><Users /></div>
                             <div>
                                 <p className="text-sm text-zinc-500 font-medium">Total Principal</p>
-                                <p className="text-2xl font-bold text-zinc-900">{totalPrincipal.toFixed(2)}</p>
+                                <p className="text-2xl font-bold text-zinc-900">{formatPHP(totalPrincipal)}</p>
                             </div>
                         </div>
                     </div>
@@ -81,7 +91,7 @@ export default function ActiveLoans({ activeLoansFromDb }: LoanActiveProps) {
                             <div className="p-3 bg-amber-50 rounded-lg text-amber-600"><CheckCircle2 /></div>
                             <div>
                                 <p className="text-sm text-zinc-500 font-medium">Remaining Balance</p>
-                                <p className="text-2xl font-bold text-zinc-900">{totalRemaining.toFixed(2)}</p>
+                                <p className="text-2xl font-bold text-zinc-900">{formatPHP(totalRemaining)}</p>
                             </div>
                         </div>
                     </div>
@@ -122,12 +132,12 @@ export default function ActiveLoans({ activeLoansFromDb }: LoanActiveProps) {
                                 <tr key={loan.id}>
                                     <td className="px-6 py-4 text-sm font-medium text-zinc-900">{loan.id}</td>
                                     <td className="px-6 py-4 text-sm text-zinc-700">
-                                        <div>{loan.member.name}</div>
+                                        <div className="font-semibold">{loan.member.name}</div>
                                         <div className="text-xs text-zinc-500">{loan.member.email}</div>
                                     </td>
                                     <td className="px-6 py-4 text-sm text-zinc-700">{loan.loan_request_id}</td>
-                                    <td className="px-6 py-4 text-sm text-right text-zinc-900">{loan.principal_amount}</td>
-                                    <td className="px-6 py-4 text-sm text-right text-zinc-900">{loan.remaining_balance}</td>
+                                    <td className="px-6 py-4 text-sm text-right text-zinc-900 font-medium">{formatPHP(loan.principal_amount)}</td>
+                                    <td className="px-6 py-4 text-sm text-right text-zinc-900 font-medium">{formatPHP(loan.remaining_balance)}</td>
                                     <td className="px-6 py-4 text-sm text-right text-zinc-900">{loan.interest_rate}%</td>
                                     <td className="px-6 py-4">
                                         <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${badgeClass(loan.status)}`}>
@@ -156,59 +166,62 @@ export default function ActiveLoans({ activeLoansFromDb }: LoanActiveProps) {
                     </table>
                 </div>
 
+                {/* MODAL DIALOG */}
                 {selectedLoan && (
                     <Dialog open={Boolean(selectedLoan)} onOpenChange={(open) => { if (!open) setSelectedLoan(null); }}>
-                        <DialogContent className="max-w-3xl">
-                            <DialogHeader>
-                                <DialogTitle>Loan #{selectedLoan.id} Details</DialogTitle>
-                                <DialogDescription>
+                        <DialogContent className="max-w-3xl rounded-3xl overflow-hidden p-0 border-none">
+                            <DialogHeader className="p-6 bg-zinc-50 border-b border-zinc-100">
+                                <DialogTitle className="text-xl font-bold text-zinc-900">Loan #{selectedLoan.id} Details</DialogTitle>
+                                <DialogDescription className="text-zinc-500 font-medium">
                                     Detailed information for this loan and borrower.
                                 </DialogDescription>
                             </DialogHeader>
 
-                            <div className="space-y-6 py-4">
+                            <div className="p-6 space-y-6">
                                 <div className="grid gap-4 sm:grid-cols-2">
-                                    <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+                                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5">
                                         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Borrower</p>
                                         <p className="mt-3 text-lg font-semibold text-zinc-900">{selectedLoan.member.name}</p>
                                         <p className="text-sm text-zinc-500">{selectedLoan.member.email}</p>
                                     </div>
-                                    <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+                                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5">
                                         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Loan Request</p>
                                         <p className="mt-3 text-lg font-semibold text-zinc-900">#{selectedLoan.loan_request_id}</p>
                                     </div>
                                 </div>
 
                                 <div className="grid gap-4 sm:grid-cols-3">
-                                    <div className="rounded-3xl border border-zinc-200 bg-white p-5">
-                                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Principal Amount</p>
-                                        <p className="mt-3 text-2xl font-bold text-zinc-900">₱{Number(selectedLoan.principal_amount).toLocaleString()}</p>
+                                    <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Principal</p>
+                                        <p className="mt-3 text-xl font-bold text-zinc-900">{formatPHP(selectedLoan.principal_amount)}</p>
                                     </div>
-                                    <div className="rounded-3xl border border-zinc-200 bg-white p-5">
-                                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Remaining Balance</p>
-                                        <p className="mt-3 text-2xl font-bold text-zinc-900">₱{Number(selectedLoan.remaining_balance).toLocaleString()}</p>
+                                    <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Remaining</p>
+                                        <p className="mt-3 text-xl font-bold text-emerald-600">{formatPHP(selectedLoan.remaining_balance)}</p>
                                     </div>
-                                    <div className="rounded-3xl border border-zinc-200 bg-white p-5">
-                                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Interest Rate</p>
-                                        <p className="mt-3 text-2xl font-bold text-zinc-900">{selectedLoan.interest_rate}%</p>
+                                    <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Interest</p>
+                                        <p className="mt-3 text-xl font-bold text-zinc-900">{selectedLoan.interest_rate}%</p>
                                     </div>
                                 </div>
 
-                                <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
-                                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Total Payable</p>
-                                    <p className="mt-3 text-xl font-semibold text-zinc-900">₱{Number(selectedLoan.total_payable).toLocaleString()}</p>
-                                    <p className="mt-2 text-sm text-zinc-500">Paid so far: ₱{(Number(selectedLoan.total_payable) - Number(selectedLoan.remaining_balance)).toLocaleString()}</p>
+                                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Repayment Progress</p>
+                                    <p className="mt-3 text-xl font-semibold text-zinc-900">Total Payable: {formatPHP(selectedLoan.total_payable)}</p>
+                                    <p className="mt-2 text-sm text-zinc-500">
+                                        Paid so far: <span className="font-bold text-zinc-700">{formatPHP(Number(selectedLoan.total_payable) - Number(selectedLoan.remaining_balance))}</span>
+                                    </p>
                                 </div>
 
-                                <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+                                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5">
                                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Status</p>
                                     <p className="mt-3 text-lg font-semibold text-zinc-900 capitalize">{selectedLoan.status.replace(/_/g, ' ')}</p>
                                 </div>
                             </div>
 
-                            <DialogFooter>
+                            <DialogFooter className="p-6 bg-zinc-50 border-t border-zinc-100">
                                 <DialogClose asChild>
-                                    <button className="inline-flex justify-center rounded-xl border border-zinc-200 bg-white px-5 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition">
+                                    <button className="w-full sm:w-auto inline-flex justify-center rounded-xl border border-zinc-200 bg-white px-8 py-3 text-sm font-bold uppercase tracking-widest text-zinc-700 hover:bg-zinc-100 transition shadow-sm">
                                         Close
                                     </button>
                                 </DialogClose>

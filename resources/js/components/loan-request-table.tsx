@@ -25,6 +25,15 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
     const isSuperadmin = auth?.user?.role === 'superadmin';
     const [activeRequest, setActiveRequest] = useState<LoanRequest | null>(null);
 
+    // --- CURRENCY FORMATTER HELPER ---
+    const formatPHP = (amount: number | string) => {
+        return new Intl.NumberFormat('en-PH', {
+            style: 'currency',
+            currency: 'PHP',
+            minimumFractionDigits: 2,
+        }).format(Number(amount));
+    };
+
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString('en-US', {
             month: 'short',
@@ -53,7 +62,7 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
                         <th className="px-6 py-4">REQUESTED BY</th>
                         <th className="px-6 py-4">REQUESTED AT</th>
                         <th className="px-6 py-4">STATUS</th>
-                        <th className="px-6 py-4">ACTIONS</th>
+                        <th className="px-6 py-4 text-right">ACTIONS</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
@@ -70,7 +79,8 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
                         loanRequests.map((request) => (
                             <tr key={request.id} className="hover:bg-zinc-50/70 transition group">
                                 <td className="px-6 py-4">
-                                    <p className="font-bold text-zinc-900">₱{Number(request.amount).toLocaleString()}</p>
+                                    {/* UPDATED: Currency format in Table */}
+                                    <p className="font-bold text-zinc-900">{formatPHP(request.amount)}</p>
                                     <div className="flex items-center gap-1.5 mt-1 text-zinc-500">
                                         <Banknote className="w-3.5 h-3.5" />
                                         <span className="text-xs">Request #{request.id}</span>
@@ -116,6 +126,7 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
                     }}
                 >
                     <div className="w-full max-w-3xl rounded-3xl overflow-hidden bg-white shadow-2xl">
+                        {/* Modal Header */}
                         <div className="flex items-start justify-between gap-4 border-b border-zinc-200 bg-zinc-50 p-6">
                             <div>
                                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-zinc-500">Loan Request Details</p>
@@ -125,7 +136,7 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
                             <button
                                 type="button"
                                 onClick={() => setActiveRequest(null)}
-                                className="rounded-full border border-zinc-200 bg-white p-2 text-zinc-500 transition hover:bg-zinc-100"
+                                className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-bold uppercase text-zinc-500 transition hover:bg-zinc-100"
                             >
                                 Close
                             </button>
@@ -135,7 +146,8 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
                                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Amount</p>
-                                    <p className="mt-3 text-3xl font-bold text-zinc-900">₱{Number(activeRequest.amount).toLocaleString()}</p>
+                                    {/* UPDATED: Currency format in Modal */}
+                                    <p className="mt-3 text-3xl font-bold text-zinc-900">{formatPHP(activeRequest.amount)}</p>
                                 </div>
                                 <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
                                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Requested At</p>
@@ -143,6 +155,7 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
                                 </div>
                             </div>
 
+                            {/* Status Stepper Section */}
                             <div className="rounded-3xl border border-zinc-200 bg-white p-6">
                                 <div className="flex items-center justify-between gap-4">
                                     <div>
@@ -187,6 +200,7 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
                                 </div>
                             </div>
 
+                            {/* Requester Info */}
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
                                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Requested By</p>
@@ -199,11 +213,13 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
                                 </div>
                             </div>
 
+                            {/* Purpose */}
                             <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6">
                                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Purpose</p>
                                 <p className="mt-3 text-sm leading-7 text-zinc-900">{activeRequest.purpose || 'No purpose provided.'}</p>
                             </div>
 
+                            {/* Action Buttons */}
                             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                                 <button
                                     type="button"
