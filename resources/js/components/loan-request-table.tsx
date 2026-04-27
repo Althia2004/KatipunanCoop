@@ -199,6 +199,11 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
                                 </div>
                             </div>
 
+                            <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-6">
+                                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Purpose</p>
+                                <p className="mt-3 text-sm leading-7 text-zinc-900">{activeRequest.purpose || 'No purpose provided.'}</p>
+                            </div>
+
                             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                                 <button
                                     type="button"

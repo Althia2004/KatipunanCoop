@@ -15,6 +15,7 @@ class LoanManagementController extends Controller
             return [
                 'id' => $loanRequest->id,
                 'amount' => $loanRequest->amount,
+                'purpose' => $loanRequest->purpose,
                 'status' => $loanRequest->status,
                 'requested_at' => $loanRequest->requested_at?->toDateString(),
                 'requested_by' => [
