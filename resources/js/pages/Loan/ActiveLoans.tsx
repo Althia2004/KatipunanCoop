@@ -32,6 +32,19 @@ export default function ActiveLoans({ activeLoansFromDb }: LoanActiveProps) {
     const totalPrincipal = activeLoansFromDb.reduce((sum, loan) => sum + parseFloat(loan.principal_amount), 0);
     const totalRemaining = activeLoansFromDb.reduce((sum, loan) => sum + parseFloat(loan.remaining_balance), 0);
 
+    const badgeClass = (status: Loan['status']) => {
+        switch (status) {
+            case 'active':
+                return 'bg-emerald-100 text-emerald-700';
+            case 'fully_paid':
+                return 'bg-blue-100 text-blue-700';
+            case 'defaulted':
+                return 'bg-rose-100 text-rose-700';
+            default:
+                return 'bg-zinc-100 text-zinc-700';
+        }
+    };
+
     return (
         <>
             <Head title="Loan Management" />
@@ -116,7 +129,11 @@ export default function ActiveLoans({ activeLoansFromDb }: LoanActiveProps) {
                                     <td className="px-6 py-4 text-sm text-right text-zinc-900">{loan.principal_amount}</td>
                                     <td className="px-6 py-4 text-sm text-right text-zinc-900">{loan.remaining_balance}</td>
                                     <td className="px-6 py-4 text-sm text-right text-zinc-900">{loan.interest_rate}%</td>
-                                    <td className="px-6 py-4 text-sm text-zinc-700">{loan.status}</td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${badgeClass(loan.status)}`}>
+                                            {loan.status.replace(/_/g, ' ')}
+                                        </span>
+                                    </td>
                                     <td className="px-6 py-4 text-right">
                                         <button
                                             type="button"
