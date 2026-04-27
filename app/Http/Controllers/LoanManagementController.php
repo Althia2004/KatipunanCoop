@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Loan;
 use App\Models\LoanRequest;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -62,6 +63,38 @@ class LoanManagementController extends Controller
             'status' => $status,
         ]);
 
+        if ($status === LoanRequest::STATUS_APPROVED) {
+            $loanRequest->createLoanFromRequest();
+        }
+
         return redirect()->route('loan.management');
+    }
+
+    public function active(): Response
+    {
+        $user = request()->user();
+        abort_unless($user?->isSuperadmin() || $user?->isAdmin(), 403);
+
+        $activeLoans = Loan::with(['borrower', 'loanRequest'])
+            ->where('status', 'active')
+            ->get()
+            ->map(function (Loan $loan) {
+                return [
+                    'id' => $loan->id,
+                    'member' => [
+                        'id' => $loan->borrower?->id,
+                        'name' => $loan->borrower?->name,
+                        'email' => $loan->borrower?->email,
+                    ],
+                    'loan_request_id' => $loan->loan_request_id,
+                    'principal_amount' => $loan->principal_amount,
+                    'interest_rate' => $loan->interest_rate,
+                    'total_payable' => $loan->total_payable,
+                    'remaining_balance' => $loan->remaining_balance,
+                    'status' => $loan->status,
+                ];
+            });
+
+        return Inertia::render('Loan/ActiveLoans', ['activeLoansFromDb' => $activeLoans]);
     }
 }

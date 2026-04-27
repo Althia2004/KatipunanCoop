@@ -25,13 +25,13 @@ export default function Management({ loanRequestsFromDb }: LoanManagementProps) 
 
     return (
         <>
-            <Head title="Loan Management" />
+            <Head title="Loan Requests" />
 
             <div className="p-8 max-w-7xl mx-auto space-y-8">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 pb-6">
                     <div>
-                        <h1 className="text-3xl font-bold text-[#2d4734]">Loan Management</h1>
-                        <p className="text-zinc-500 font-medium">Track loan requests and approval status for the superadmin loan workflow.</p>
+                        <h1 className="text-3xl font-bold text-[#2d4734]">Loan Requests</h1>
+                        <p className="text-zinc-500 font-medium">Track loan requests and approval status for the loan workflow.</p>
                     </div>
                 </div>
 

@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class LoanRequest extends Model
 {
@@ -33,6 +33,25 @@ class LoanRequest extends Model
     public function requestedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'requested_by');
+    }
+
+    public function loan(): HasOne
+    {
+        return $this->hasOne(Loan::class);
+    }
+
+    public function createLoanFromRequest(): Loan
+    {
+        return $this->loan()->firstOrCreate([
+            'member_id' => $this->requested_by,
+            'loan_request_id' => $this->id,
+        ], [
+            'principal_amount' => $this->amount,
+            'interest_rate' => 0.00,
+            'total_payable' => $this->amount,
+            'remaining_balance' => $this->amount,
+            'status' => 'active',
+        ]);
     }
 
     public function isPending(): bool

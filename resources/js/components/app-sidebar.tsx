@@ -31,16 +31,16 @@ export function AppSidebar() {
     const page = usePage();
     const { auth } = page.props;
 
-    let dashboardUrl: string;
-    if (auth?.user?.role === 'superadmin') {
-        dashboardUrl = '/superadmin/dashboard';
-    } else if (auth?.user?.role === 'admin') {
-        dashboardUrl = page.props.currentTeam
-            ? dashboard(page.props.currentTeam.slug)
-            : '/';
-    } else {
-        dashboardUrl = '/member/dashboard';
-    }
+    const userRole = auth?.user?.role as string | undefined;
+    const dashboardUrl = userRole === 'superadmin'
+        ? '/superadmin/dashboard'
+        : userRole === 'admin'
+            ? page.props.currentTeam
+                ? dashboard(page.props.currentTeam.slug)
+                : '/'
+            : '/member/dashboard';
+
+    const isAdminNav = userRole === 'admin' || userRole === 'superadmin';
 
     const featureNavItems: NavItem[] = [
         {
@@ -67,11 +67,19 @@ export function AppSidebar() {
             icon: Users,
         },
         {
-            title: 'Loan Management',
+            title: 'Loan Requests',
             href: '/loan/management',
             icon: FileText,
         },
     ];
+
+    if (isAdminNav) {
+        loanNavItems.push({
+            title: 'Loan Management',
+            href: '/loan/active',
+            icon: FileText,
+        });
+    }
 
     const userNavItems: NavItem[] = [
         {
