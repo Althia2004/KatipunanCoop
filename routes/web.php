@@ -6,6 +6,7 @@ use App\Http\Controllers\SeminarController;
 use App\Http\Controllers\AnnualReportsController;
 use App\Http\Controllers\BeneficiaryController;
 use App\Http\Controllers\MemberRegistrationController;
+use App\Http\Controllers\MemberController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Support\Facades\Route;
@@ -103,6 +104,27 @@ Route::middleware(['auth'])->group(function () {
 
     Route::inertia('/user/dividend-reports', 'User/DividendReports')
         ->name('user.dividend-reports');
+
+    Route::inertia('/superadmin/pending-approvals', 'Superadmin/PendingApprovals/PendingApprovalsPanel')
+        ->name('superadmin.pending-approvals');
+});
+
+// --- API Routes: Member Management ---
+Route::prefix('api')->middleware(['auth'])->group(function () {
+    Route::get('/members', [MemberController::class, 'index'])
+        ->name('api.members.index');
+    Route::get('/members/pending', [MemberController::class, 'pending'])
+        ->name('api.members.pending');
+    Route::post('/members', [MemberController::class, 'store'])
+        ->name('api.members.store');
+    Route::put('/members/{member}', [MemberController::class, 'update'])
+        ->name('api.members.update');
+    Route::delete('/members/{member}', [MemberController::class, 'destroy'])
+        ->name('api.members.destroy');
+    Route::put('/members/{member}/approve', [MemberController::class, 'approve'])
+        ->name('api.members.approve');
+    Route::put('/members/{member}/reject', [MemberController::class, 'reject'])
+        ->name('api.members.reject');
 });
 
 require __DIR__.'/settings.php';
