@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\MemberRegistration\AssignSeminarRequest;
 use App\Http\Requests\MemberRegistration\StoreMemberRegistrationRequest;
 use App\Models\MemberRegistration;
+use App\Models\Member;
 use App\Models\Seminar;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -47,6 +48,7 @@ class MemberRegistrationController extends Controller
 
     /**
      * Persist the registration, co-maker, and initial beneficiaries in one transaction.
+     * Also creates a pending Member record for superadmin approval.
      */
     public function store(StoreMemberRegistrationRequest $request): RedirectResponse
     {
@@ -66,9 +68,20 @@ class MemberRegistrationController extends Controller
             $registration->beneficiaries()->create($beneficiary);
         }
 
+        // Create a pending Member record for superadmin approval workflow
+        Member::create([
+            'member_registration_id' => $registration->id,
+            'name' => $registration->full_name,
+            'gender' => $validated['gender'] ?? null,
+            'status' => Member::STATUS_PENDING,
+            'membership_status' => Member::MEMBERSHIP_GOOD,
+            'standing' => 'active',
+            'start_date' => now()->toDateString(),
+        ]);
+
         return redirect()
             ->route('loan.member-registration.show', $registration)
-            ->with('message', 'Registration submitted successfully.');
+            ->with('message', 'Registration submitted successfully. Awaiting superadmin approval.');
     }
 
     /**
