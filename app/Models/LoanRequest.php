@@ -20,6 +20,7 @@ class LoanRequest extends Model
         'amount',
         'requested_by',
         'requested_at',
+        'interest_rate',
         'status',
         'purpose', // Recommended for BOD review
         'term_months',
@@ -48,6 +49,7 @@ class LoanRequest extends Model
         ], [
             'principal_amount' => $this->amount,
             'interest_rate' => 0.00,
+            'term_months' => $this->term_months,
             'total_payable' => $this->amount,
             'remaining_balance' => $this->amount,
             'status' => 'active',

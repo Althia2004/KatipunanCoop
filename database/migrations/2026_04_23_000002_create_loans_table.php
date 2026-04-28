@@ -21,6 +21,7 @@ return new class extends Migration
                 ->cascadeOnDelete();
 
             $table->decimal('principal_amount', 15, 2);
+            $table->integer('term_months'); 
             $table->decimal('interest_rate', 5, 2);
             $table->decimal('total_payable', 15, 2);
             $table->decimal('remaining_balance', 15, 2);

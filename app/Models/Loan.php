@@ -16,6 +16,7 @@ class Loan extends Model
         'loan_request_id',
         'principal_amount',
         'interest_rate',
+        'term_months',
         'total_payable',
         'remaining_balance',
         'status', // active, fully_paid, defaulted

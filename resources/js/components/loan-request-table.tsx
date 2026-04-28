@@ -211,6 +211,14 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
                                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Current Status</p>
                                     <p className="mt-3 text-xl font-semibold text-zinc-900">{activeRequest.status.replace(/_/g, ' ')}</p>
                                 </div>
+                                <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Term (Months)</p>
+                                    <p className="mt-3 text-xl font-semibold text-zinc-900">{activeRequest.term_months}</p>
+                                </div>
+                                <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Interest Rate</p>
+                                    <p className="mt-3 text-xl font-semibold text-zinc-900">{activeRequest.interest_rate}%</p>
+                                    </div>
                             </div>
 
                             {/* Purpose */}

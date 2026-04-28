@@ -10,6 +10,7 @@ interface ModalProps {
 export default function LoanRequestModal({ isOpen, onClose }: ModalProps) {
     const { data, setData, post, processing, errors, reset } = useForm({
         amount: '',
+        term: '',
         purpose: '',
     });
 
@@ -50,6 +51,22 @@ export default function LoanRequestModal({ isOpen, onClose }: ModalProps) {
                         />
                         {errors.amount && <p className="text-red-500 text-xs mt-1 font-medium">{errors.amount}</p>}
                     </div>
+
+                    <div>
+                        <label className="block text-sm font-bold text-zinc-700 mb-1.5">Term(Months)</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            value={data.term}
+                            onChange={(e) => setData('term', e.target.value)}
+                            className={`w-full text-zinc-900 bg-zinc-50 rounded-xl border-zinc-300 p-3 focus:ring-[#4c9f5f] focus:border-[#4c9f5f] transition-all ${
+                                errors.term ? 'border-red-500 ring-1 ring-red-500' : ''
+                            }`}
+                            placeholder="0.00"
+                        />
+                        {errors.term && <p className="text-red-500 text-xs mt-1 font-medium">{errors.term}</p>}
+                    </div>
+
 
                     <div>
                         <label className="block text-sm font-bold text-zinc-700 mb-1.5">Purpose</label>

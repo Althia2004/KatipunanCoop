@@ -20,6 +20,7 @@ return new class extends Migration
             $table->string('status')->default('pending');
             $table->text('purpose')->nullable();
             $table->integer('term_months')->default(12);
+            $table->decimal('interest_rate', 10, 2)->default(1.00);
         });
     }
 

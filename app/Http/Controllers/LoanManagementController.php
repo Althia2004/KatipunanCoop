@@ -18,6 +18,8 @@ class LoanManagementController extends Controller
                 'amount' => $loanRequest->amount,
                 'purpose' => $loanRequest->purpose,
                 'status' => $loanRequest->status,
+                'term_months' => $loanRequest->term_months,
+                'interest_rate' => $loanRequest->interest_rate,
                 'requested_at' => $loanRequest->requested_at?->toDateString(),
                 'requested_by' => [
                     'id' => $loanRequest->requestedBy?->id,
@@ -34,12 +36,15 @@ class LoanManagementController extends Controller
     {
         $request->validate([
             'amount' => ['required', 'numeric', 'min:1'],
+            'term' => ['required', 'integer', 'min:1'],
             'purpose' => ['nullable', 'string', 'max:500'],
         ]);
 
         LoanRequest::create([
             'amount' => $request->input('amount'),
             'purpose' => $request->input('purpose'),
+            'term_months' => $request->input('term'),
+            'interest_rate' => 1.00, // Default interest rate, can be updated later by admin
             'requested_by' => $request->user()->id,
             'requested_at' => now()->toDateString(),
             'status' => LoanRequest::STATUS_PENDING,
