@@ -19,7 +19,7 @@ class LoanManagementController extends Controller
                 'purpose' => $loanRequest->purpose,
                 'status' => $loanRequest->status,
                 'term_months' => $loanRequest->term_months,
-                'interest_rate' => $loanRequest->interest_rate,
+                'interest_rate' => $loanRequest->interest_rate, // Now being passed to React
                 'requested_at' => $loanRequest->requested_at?->toDateString(),
                 'requested_by' => [
                     'id' => $loanRequest->requestedBy?->id,
@@ -44,21 +44,25 @@ class LoanManagementController extends Controller
             'amount' => $request->input('amount'),
             'purpose' => $request->input('purpose'),
             'term_months' => $request->input('term'),
-            'interest_rate' => 1.00, // Default interest rate, can be updated later by admin
             'requested_by' => $request->user()->id,
             'requested_at' => now()->toDateString(),
             'status' => LoanRequest::STATUS_PENDING,
+            'interest_rate' => 1.00, // Default starting rate
         ]);
 
         return redirect()->route('loan.management');
     }
 
-    public function approve(LoanRequest $loanRequest)
+    public function approve(LoanRequest $loanRequest, Request $request)
     {
-        $user = request()->user();
+        $user = $request->user();
 
         abort_unless($user?->isSuperadmin(), 403);
         abort_unless($loanRequest->status === LoanRequest::STATUS_PENDING, 403);
+
+        $validated = $request->validate([
+            'interest_rate' => ['required', 'numeric', 'min:0', 'max:100'],
+        ]);
 
         $status = (float) $loanRequest->amount <= 50000
             ? LoanRequest::STATUS_APPROVED
@@ -66,6 +70,7 @@ class LoanManagementController extends Controller
 
         $loanRequest->update([
             'status' => $status,
+            'interest_rate' => $validated['interest_rate'], // Save the edited rate
         ]);
 
         if ($status === LoanRequest::STATUS_APPROVED) {
