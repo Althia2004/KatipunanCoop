@@ -7,6 +7,8 @@ use App\Http\Controllers\AnnualReportsController;
 use App\Http\Controllers\BeneficiaryController;
 use App\Http\Controllers\MemberRegistrationController;
 use App\Http\Controllers\MemberController;
+use App\Http\Controllers\MemberAuthController;
+use App\Http\Controllers\SuperadminController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Support\Facades\Route;
@@ -17,11 +19,38 @@ Route::inertia('/', 'welcome', [
     'canResetPassword' => Features::enabled(Features::resetPasswords()),
 ])->name('home');
 
+// ── Superadmin ──
+Route::prefix('superadmin')
+    ->middleware(['auth', 'superadmin'])
+    ->group(function () {
+        Route::get('/dashboard', [SuperadminController::class, 'dashboard'])->name('superadmin.dashboard');
+        Route::get('/staff', [SuperadminController::class, 'staff'])->name('superadmin.staff');
+        Route::post('/staff', [SuperadminController::class, 'storeStaff'])->name('superadmin.staff.store');
+        Route::put('/staff/{user}', [SuperadminController::class, 'updateStaff'])->name('superadmin.staff.update');
+        Route::delete('/staff/{user}', [SuperadminController::class, 'destroyStaff'])->name('superadmin.staff.destroy');
+        Route::get('/approvals', [SuperadminController::class, 'approvals'])->name('superadmin.approvals');
+        Route::get('/settings/interest', [SuperadminController::class, 'settings'])->name('superadmin.settings');
+        Route::post('/settings', [SuperadminController::class, 'updateSettings'])->name('superadmin.settings.update');
+        Route::get('/audit', [SuperadminController::class, 'audit'])->name('superadmin.audit');
+        Route::get('/reports/annual', [SuperadminController::class, 'annualReports'])->name('superadmin.reports.annual');
+        Route::post('/reports/annual', [SuperadminController::class, 'storeAnnualReport'])->name('superadmin.reports.annual.store');
+        Route::get('/reports/annual/{meeting}/download', [SuperadminController::class, 'downloadAnnualReport'])->name('superadmin.reports.annual.download');
+        Route::get('/reports/financial', [SuperadminController::class, 'financialReports'])->name('superadmin.reports.financial');
+        Route::get('/members', [SuperadminController::class, 'members'])->name('superadmin.members');
+        Route::get('/loans', [SuperadminController::class, 'loans'])->name('superadmin.loans');
+        Route::inertia('/pending-approvals', 'Superadmin/PendingApprovals/PendingApprovalsPanel')
+            ->name('superadmin.pending-approvals');
+    });
+
+// ── Member Portal (guest-accessible) ──
+Route::get('/member/login', fn () => inertia('member/login'))->name('member.login');
+Route::post('/member/login', [MemberAuthController::class, 'login'])->name('member.login.post');
+Route::post('/member/logout', [MemberAuthController::class, 'logout'])->name('member.logout');
+
 // ── Coming-Soon role-based dashboard placeholders ──
 Route::middleware(['auth'])->group(function () {
-    Route::inertia('/member/dashboard',     'ComingSoon', ['page' => 'Member Dashboard'])->name('member.dashboard');
+    Route::get('/member/dashboard', [MemberAuthController::class, 'dashboard'])->name('member.dashboard');
     Route::inertia('/admin/dashboard',      'ComingSoon', ['page' => 'Admin Dashboard'])->name('admin.dashboard');
-    Route::inertia('/superadmin/dashboard', 'ComingSoon', ['page' => 'Superadmin Dashboard'])->name('superadmin.dashboard');
     Route::inertia('/manager/dashboard',    'ComingSoon', ['page' => 'Manager Dashboard'])->name('manager.dashboard');
     Route::inertia('/board/dashboard',      'ComingSoon', ['page' => 'Board of Directors Dashboard'])->name('board.dashboard');
     Route::inertia('/bookkeeper/dashboard', 'ComingSoon', ['page' => 'Bookkeeper Dashboard'])->name('bookkeeper.dashboard');
@@ -104,9 +133,6 @@ Route::middleware(['auth'])->group(function () {
 
     Route::inertia('/user/dividend-reports', 'User/DividendReports')
         ->name('user.dividend-reports');
-
-    Route::inertia('/superadmin/pending-approvals', 'Superadmin/PendingApprovals/PendingApprovalsPanel')
-        ->name('superadmin.pending-approvals');
 });
 
 // --- API Routes: Member Management ---

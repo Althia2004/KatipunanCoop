@@ -14,6 +14,7 @@ import {
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
+import { NavSuperadmin } from '@/components/nav-superadmin';
 import { NavUser } from '@/components/nav-user';
 import {
     Sidebar,
@@ -132,11 +133,15 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain
-                    featureItems={featureNavItems}
-                    loanItems={loanNavItems}
-                    userItems={userNavItems}
-                />
+                {userRole === 'superadmin' ? (
+                    <NavSuperadmin />
+                ) : (
+                    <NavMain
+                        featureItems={featureNavItems}
+                        loanItems={loanNavItems}
+                        userItems={userNavItems}
+                    />
+                )}
             </SidebarContent>
 
             <SidebarFooter>
