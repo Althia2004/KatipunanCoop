@@ -42,15 +42,27 @@ export function NavMain({
     const { isCurrentUrl } = useCurrentUrl();
 
     return (
-        <SidebarGroup className="px-2 py-0">
-            <SidebarGroupLabel>Features</SidebarGroupLabel>
-            {renderMenu(featureItems, isCurrentUrl)}
+        <>
+            {featureItems.length > 0 && (
+                <SidebarGroup className="px-2 py-0">
+                    <SidebarGroupLabel>Features</SidebarGroupLabel>
+                    {renderMenu(featureItems, isCurrentUrl)}
+                </SidebarGroup>
+            )}
 
-            <SidebarGroupLabel>Loan Management</SidebarGroupLabel>
-            {renderMenu(loanItems, isCurrentUrl)}
+            {loanItems.length > 0 && (
+                <SidebarGroup className="px-2 py-0">
+                    <SidebarGroupLabel>Loan Management</SidebarGroupLabel>
+                    {renderMenu(loanItems, isCurrentUrl)}
+                </SidebarGroup>
+            )}
 
-            <SidebarGroupLabel>User Management</SidebarGroupLabel>
-            {renderMenu(userItems, isCurrentUrl)}
-        </SidebarGroup>
+            {userItems.length > 0 && (
+                <SidebarGroup className="px-2 py-0">
+                    <SidebarGroupLabel>User Management</SidebarGroupLabel>
+                    {renderMenu(userItems, isCurrentUrl)}
+                </SidebarGroup>
+            )}
+        </>
     );
 }

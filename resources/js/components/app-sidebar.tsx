@@ -15,7 +15,6 @@ import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
-import { TeamSwitcher } from '@/components/team-switcher';
 import {
     Sidebar,
     SidebarContent,
@@ -30,9 +29,18 @@ import type { NavItem } from '@/types';
 
 export function AppSidebar() {
     const page = usePage();
-    const dashboardUrl = page.props.currentTeam
-        ? dashboard(page.props.currentTeam.slug)
-        : '/';
+    const { auth } = page.props;
+
+    const userRole = auth?.user?.role as string | undefined;
+    const dashboardUrl = userRole === 'superadmin'
+        ? '/superadmin/dashboard'
+        : userRole === 'admin'
+            ? page.props.currentTeam
+                ? dashboard(page.props.currentTeam.slug)
+                : '/'
+            : '/member/dashboard';
+
+    const isAdminNav = userRole === 'admin' || userRole === 'superadmin';
 
     const featureNavItems: NavItem[] = [
         {
@@ -59,11 +67,19 @@ export function AppSidebar() {
             icon: Users,
         },
         {
-            title: 'Loan Management',
+            title: 'Loan Requests',
             href: '/loan/management',
             icon: FileText,
         },
     ];
+
+    if (isAdminNav) {
+        loanNavItems.push({
+            title: 'Loan Management',
+            href: '/loan/active',
+            icon: FileText,
+        });
+    }
 
     const userNavItems: NavItem[] = [
         {
@@ -111,11 +127,6 @@ export function AppSidebar() {
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>
-                    </SidebarMenuItem>
-                </SidebarMenu>
-                <SidebarMenu>
-                    <SidebarMenuItem>
-                        <TeamSwitcher />
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarHeader>

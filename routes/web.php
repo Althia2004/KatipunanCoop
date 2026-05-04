@@ -1,6 +1,12 @@
 <?php
 
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\LoanManagementController;
+use App\Http\Controllers\SeminarController;
 use App\Http\Controllers\AnnualReportsController;
+use App\Http\Controllers\BeneficiaryController;
+use App\Http\Controllers\MemberRegistrationController;
+use App\Http\Controllers\MemberController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Support\Facades\Route;
@@ -11,10 +17,21 @@ Route::inertia('/', 'welcome', [
     'canResetPassword' => Features::enabled(Features::resetPasswords()),
 ])->name('home');
 
+// ── Coming-Soon role-based dashboard placeholders ──
+Route::middleware(['auth'])->group(function () {
+    Route::inertia('/member/dashboard',     'ComingSoon', ['page' => 'Member Dashboard'])->name('member.dashboard');
+    Route::inertia('/admin/dashboard',      'ComingSoon', ['page' => 'Admin Dashboard'])->name('admin.dashboard');
+    Route::inertia('/superadmin/dashboard', 'ComingSoon', ['page' => 'Superadmin Dashboard'])->name('superadmin.dashboard');
+    Route::inertia('/manager/dashboard',    'ComingSoon', ['page' => 'Manager Dashboard'])->name('manager.dashboard');
+    Route::inertia('/board/dashboard',      'ComingSoon', ['page' => 'Board of Directors Dashboard'])->name('board.dashboard');
+    Route::inertia('/bookkeeper/dashboard', 'ComingSoon', ['page' => 'Bookkeeper Dashboard'])->name('bookkeeper.dashboard');
+    Route::inertia('/hr/dashboard',         'ComingSoon', ['page' => 'HR Manager Dashboard'])->name('hr.dashboard');
+});
+
 Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
-        Route::inertia('dashboard', 'dashboard')->name('dashboard');
+        Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     });
 
 Route::middleware(['auth'])->group(function () {
@@ -23,15 +40,58 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/reports/annual', [AnnualReportsController::class, 'index'])
         ->name('annual-reports.index');
+    Route::get('/reports/annual/{id}', [AnnualReportsController::class, 'show'])
+        ->name('annual-reports.show');
+    Route::patch('/reports/annual/{id}/pin', [AnnualReportsController::class, 'pin'])
+        ->name('annual-reports.pin');
 
-    Route::inertia('/loan/member-registration', 'Loan/MemberRegistration')
-        ->name('loan.member-registration');
-
-    Route::inertia('/loan/seminar-tracking', 'Loan/SeminarTracking')
+    Route::get('/loan/seminar-tracking', [SeminarController::class, 'index'])
         ->name('loan.seminar-tracking');
 
-    Route::inertia('/loan/management', 'Loan/Management')
+    Route::get('/loan/seminar-tracking/create', [SeminarController::class, 'create'])
+        ->name('loan.seminar-tracking.create');
+
+    Route::post('loan/seminar-tracking', [SeminarController::class, 'store'])
+        ->name('loan.seminar-tracking.store');
+
+    Route::get('/loan/management', [LoanManagementController::class, 'index'])
         ->name('loan.management');
+
+    Route::patch('/loan/request/{loanRequest}/approve', [LoanManagementController::class, 'approve'])
+        ->name('loan.request.approve');
+
+    Route::get('/loan/active', [LoanManagementController::class, 'active'])
+        ->name('loan.active');
+
+    Route::post('/loan/request', [LoanManagementController::class, 'store'])
+        ->name('loan.request.store');
+
+    Route::inertia('/loan/request', 'Loan/Request')
+        ->name('loan.request');
+
+    // --- Member Registration ---
+    Route::get('/loan/member-registration', [MemberRegistrationController::class, 'index'])
+        ->name('loan.member-registration');
+    Route::get('/loan/member-registration/create', [MemberRegistrationController::class, 'create'])
+        ->name('loan.member-registration.create');
+    Route::post('/loan/member-registration', [MemberRegistrationController::class, 'store'])
+        ->name('loan.member-registration.store');
+    Route::get('/loan/member-registration/{memberRegistration}', [MemberRegistrationController::class, 'show'])
+        ->name('loan.member-registration.show');
+    Route::patch('/loan/member-registration/{memberRegistration}/assign-seminar', [MemberRegistrationController::class, 'assignSeminar'])
+        ->name('loan.member-registration.assign-seminar');
+    Route::patch('/loan/member-registration/{memberRegistration}/confirm-attendance', [MemberRegistrationController::class, 'confirmAttendance'])
+        ->name('loan.member-registration.confirm-attendance');
+    Route::patch('/loan/member-registration/{memberRegistration}/endorse-to-bod', [MemberRegistrationController::class, 'endorseToBod'])
+        ->name('loan.member-registration.endorse-to-bod');
+
+    // --- Beneficiaries (staff only) ---
+    Route::post('/loan/member-registration/{memberRegistration}/beneficiaries', [BeneficiaryController::class, 'store'])
+        ->name('loan.member-registration.beneficiaries.store');
+    Route::patch('/loan/member-registration/{memberRegistration}/beneficiaries/{beneficiary}', [BeneficiaryController::class, 'update'])
+        ->name('loan.member-registration.beneficiaries.update');
+    Route::delete('/loan/member-registration/{memberRegistration}/beneficiaries/{beneficiary}', [BeneficiaryController::class, 'destroy'])
+        ->name('loan.member-registration.beneficiaries.destroy');
 
     Route::inertia('/user/member-management', 'User/MemberManagement')
         ->name('user.member-management');
@@ -44,6 +104,27 @@ Route::middleware(['auth'])->group(function () {
 
     Route::inertia('/user/dividend-reports', 'User/DividendReports')
         ->name('user.dividend-reports');
+
+    Route::inertia('/superadmin/pending-approvals', 'Superadmin/PendingApprovals/PendingApprovalsPanel')
+        ->name('superadmin.pending-approvals');
+});
+
+// --- API Routes: Member Management ---
+Route::prefix('api')->middleware(['auth'])->group(function () {
+    Route::get('/members', [MemberController::class, 'index'])
+        ->name('api.members.index');
+    Route::get('/members/pending', [MemberController::class, 'pending'])
+        ->name('api.members.pending');
+    Route::post('/members', [MemberController::class, 'store'])
+        ->name('api.members.store');
+    Route::put('/members/{member}', [MemberController::class, 'update'])
+        ->name('api.members.update');
+    Route::delete('/members/{member}', [MemberController::class, 'destroy'])
+        ->name('api.members.destroy');
+    Route::put('/members/{member}/approve', [MemberController::class, 'approve'])
+        ->name('api.members.approve');
+    Route::put('/members/{member}/reject', [MemberController::class, 'reject'])
+        ->name('api.members.reject');
 });
 
 require __DIR__.'/settings.php';
