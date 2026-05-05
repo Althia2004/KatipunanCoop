@@ -8,7 +8,6 @@ import {
     BadgeCheck,
 } from 'lucide-react';
 import AdminLoginModal from '@/components/admin-login-modal';
-import { dashboard } from '@/routes';
 
 // ── static data ──────────────────────────────────────────────────────────────
 
@@ -78,13 +77,23 @@ export default function Welcome({
     const [scrolled, setScrolled] = useState(false);
 
     const { auth, currentTeam } = usePage().props as {
-        auth: { user?: object };
+        auth: { user?: { role?: string } };
         currentTeam?: { slug: string };
     };
 
-    const dashboardUrl = currentTeam
-        ? dashboard.url({ current_team: currentTeam.slug })
-        : '/';
+    const getDashboardUrl = () => {
+        const role = auth.user?.role;
+        if (role === 'superadmin') return '/superadmin/dashboard';
+        if (role === 'member') return '/member/dashboard';
+        if (role === 'manager') return '/manager/dashboard';
+        if (role === 'board') return '/board/dashboard';
+        if (role === 'bookkeeper') return '/bookkeeper/dashboard';
+        if (role === 'hr') return '/hr/dashboard';
+        if (currentTeam?.slug) return `/${currentTeam.slug}/dashboard`;
+        return '/dashboard';
+    };
+
+    const dashboardUrl = getDashboardUrl();
 
     useEffect(() => {
         const handler = () => setScrolled(window.scrollY > 10);

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 import {
     CalendarDays,
     Clock,
@@ -9,6 +9,9 @@ import {
     TrendingDown,
     MoreHorizontal,
     Pin,
+    Link2,
+    Eye,
+    CheckCircle2,
 } from 'lucide-react';
 import {
     LineChart,
@@ -25,6 +28,7 @@ import type {
     AnnualMeetingStats,
     ChartDataPoint,
     MeetingStatus,
+    SeminarOption,
 } from '@/types/annual-meeting';
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -33,6 +37,7 @@ interface PageProps {
     meetings: AnnualMeeting[];
     stats: AnnualMeetingStats;
     chartData: ChartDataPoint[];
+    seminars: SeminarOption[];
 }
 
 // ─── constants ───────────────────────────────────────────────────────────────
@@ -113,10 +118,25 @@ function StatCard({
 
 // ─── main page ───────────────────────────────────────────────────────────────
 
-export default function Index({ meetings, stats, chartData }: PageProps) {
-    const [openMenuId, setOpenMenuId]         = useState<number | null>(null);
+export default function Index({ meetings, stats, chartData, seminars }: PageProps) {
+    const [openMenuId, setOpenMenuId]           = useState<number | null>(null);
     const [selectedMeeting, setSelectedMeeting] = useState<AnnualMeeting | null>(null);
-    const [loadingId, setLoadingId]           = useState<number | null>(null);
+    const [loadingId, setLoadingId]             = useState<number | null>(null);
+    const [linkTarget, setLinkTarget]           = useState<AnnualMeeting | null>(null);
+
+    const linkForm = useForm({ seminar_id: seminars.length === 1 ? String(seminars[0].id) : '' });
+
+    function handleLinkSeminar(e: React.FormEvent) {
+        e.preventDefault();
+        if (!linkTarget) return;
+        linkForm.patch(`/reports/annual/${linkTarget.id}/link-seminar`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setLinkTarget(null);
+                linkForm.reset();
+            },
+        });
+    }
 
     function handleView(meeting: AnnualMeeting) {
         setOpenMenuId(null);
@@ -132,6 +152,11 @@ export default function Index({ meetings, stats, chartData }: PageProps) {
     function handlePin(meeting: AnnualMeeting) {
         setOpenMenuId(null);
         router.patch(`/reports/annual/${meeting.id}/pin`, {}, { preserveScroll: true });
+    }
+
+    function handleMarkCompleted(meeting: AnnualMeeting) {
+        setOpenMenuId(null);
+        router.patch(`/reports/annual/${meeting.id}/complete`, {}, { preserveScroll: true });
     }
 
     return (
@@ -170,7 +195,7 @@ export default function Index({ meetings, stats, chartData }: PageProps) {
                             label="Attendance %"
                             value={stats.attendancePct}
                             unit="%"
-                            description="Completed meetings with participants"
+                            description={`Avg per-meeting attendance${stats.totalMembers ? ` (of ${stats.totalMembers} members)` : ''}`}
                         />
                         <StatCard
                             icon={<Zap className="w-5 h-5" />}
@@ -222,13 +247,14 @@ export default function Index({ meetings, stats, chartData }: PageProps) {
                                     <th className="px-4 py-3">Date</th>
                                     <th className="px-4 py-3">Time</th>
                                     <th className="px-4 py-3">Status</th>
+                                    <th className="px-4 py-3 text-center">Participants</th>
                                     <th className="px-4 py-3 w-14 text-center">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-zinc-100">
                                 {meetings.length === 0 && (
                                     <tr>
-                                        <td colSpan={7} className="px-4 py-10 text-center text-zinc-400 italic">
+                                        <td colSpan={8} className="px-4 py-10 text-center text-zinc-400 italic">
                                             No meetings recorded yet.
                                         </td>
                                     </tr>
@@ -252,6 +278,27 @@ export default function Index({ meetings, stats, chartData }: PageProps) {
                                                 {STATUS_LABELS[meeting.status]}
                                             </span>
                                         </td>
+                                        <td className="px-4 py-3 text-center">
+                                            <div className="flex flex-col items-center gap-0.5">
+                                                <span className="inline-flex items-center gap-1 text-xs font-medium text-zinc-600">
+                                                    <Users className="w-3.5 h-3.5 text-zinc-400" />
+                                                    {meeting.participants_count ?? 0} present
+                                                    {meeting.attendance_pct !== undefined && meeting.attendance_pct > 0 && (
+                                                        <span className="text-emerald-600 font-semibold">({meeting.attendance_pct}%)</span>
+                                                    )}
+                                                </span>
+                                                {meeting.seminar_title ? (
+                                                    <span className="text-xs text-zinc-400">via {meeting.seminar_title}</span>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => { setLinkTarget(meeting); linkForm.setData('seminar_id', seminars.length === 1 ? String(seminars[0].id) : ''); }}
+                                                        className="text-xs text-amber-600 font-medium underline underline-offset-2 hover:text-amber-800 transition"
+                                                    >
+                                                        ⚠ Link seminar
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
                                         <td className="px-4 py-3 text-center relative">
                                             <button
                                                 onClick={() => setOpenMenuId(openMenuId === meeting.id ? null : meeting.id)}
@@ -274,8 +321,25 @@ export default function Index({ meetings, stats, chartData }: PageProps) {
                                                             disabled={loadingId === meeting.id}
                                                             className="w-full px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition flex items-center gap-2"
                                                         >
-                                                            {loadingId === meeting.id ? 'Loading…' : 'View'}
+                                                            <Eye className="w-3.5 h-3.5 text-zinc-400" />
+                                                            {loadingId === meeting.id ? 'Loading…' : 'View Details'}
                                                         </button>
+                                                        <button
+                                                            onClick={() => { setOpenMenuId(null); setLinkTarget(meeting); linkForm.reset(); }}
+                                                            className="w-full px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition flex items-center gap-2"
+                                                        >
+                                                            <Link2 className="w-3.5 h-3.5 text-[#2d5a27]" />
+                                                            Link to Seminar
+                                                        </button>
+                                                        {meeting.status !== 'completed' && (
+                                                            <button
+                                                                onClick={() => handleMarkCompleted(meeting)}
+                                                                className="w-full px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50 transition flex items-center gap-2"
+                                                            >
+                                                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                                                Mark as Completed
+                                                            </button>
+                                                        )}
                                                         <button
                                                             onClick={() => handlePin(meeting)}
                                                             className="w-full px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition flex items-center gap-2"
@@ -294,6 +358,58 @@ export default function Index({ meetings, stats, chartData }: PageProps) {
                     </div>
                 </div>
             </div>
+
+            {/* ── Link Seminar Dialog ── */}
+            {linkTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+                        <h3 className="text-base font-semibold text-zinc-800 mb-1">Link Seminar to Meeting</h3>
+                        <p className="text-xs text-zinc-400 mb-4">{linkTarget.topic}</p>
+                        <p className="text-sm text-zinc-500 mb-4">
+                            Linking a seminar will automatically pull all attendees as participants
+                            for this annual meeting.
+                        </p>
+                        <form onSubmit={handleLinkSeminar} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-medium text-zinc-600 mb-1">
+                                    Select Seminar
+                                </label>
+                                <select
+                                    value={linkForm.data.seminar_id}
+                                    onChange={e => linkForm.setData('seminar_id', e.target.value)}
+                                    className="w-full border border-zinc-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2d5a27]/30"
+                                >
+                                    <option value="">— Select a seminar —</option>
+                                    {seminars.map(s => (
+                                        <option key={s.id} value={s.id}>
+                                            {s.title} — {s.participants_count} attendee{s.participants_count !== 1 ? 's' : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                                {linkForm.errors.seminar_id && (
+                                    <p className="text-red-500 text-xs mt-1">{linkForm.errors.seminar_id}</p>
+                                )}
+                            </div>
+                            <div className="flex gap-3 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => { setLinkTarget(null); linkForm.reset(); }}
+                                    className="flex-1 border border-zinc-200 rounded-xl py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={linkForm.processing || !linkForm.data.seminar_id}
+                                    className="flex-1 py-2.5 bg-[#2d5a27] text-white font-semibold rounded-xl hover:bg-[#1e3e1a] disabled:opacity-50 transition text-sm"
+                                >
+                                    {linkForm.processing ? 'Linking…' : 'Link Seminar'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* ── Detail Modal ── */}
             {selectedMeeting && (

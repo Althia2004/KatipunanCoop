@@ -51,7 +51,7 @@ class SuperadminController extends Controller
                 'systemAlerts'     => 0,
             ],
             'staff'           => $staff,
-            'recentApprovals' => $pendingLoans->merge($pendingRegs)->take(5)->values(),
+            'recentApprovals' => $pendingLoans->toBase()->concat($pendingRegs->toBase())->take(5)->values(),
             'recentAudit'     => [],
         ]);
     }
@@ -136,26 +136,122 @@ class SuperadminController extends Controller
             ->get()
             ->map(fn ($lr) => [
                 'id'          => $lr->id,
-                'type'        => 'Loan Approval',
+                'amount'      => $lr->principal_amount,
                 'requestedBy' => $lr->requestedBy?->name ?? 'Unknown',
                 'date'        => $lr->created_at->format('M d, Y'),
-                'priority'    => 'medium',
             ]);
 
-        $pendingRegs = MemberRegistration::where('status', MemberRegistration::STATUS_PENDING)
+        $pendingRegs = MemberRegistration::whereIn('status', [
+                MemberRegistration::STATUS_SEMINAR_ATTENDED,
+                'for_bod_approval',
+            ])
             ->latest()
             ->get()
             ->map(fn ($mr) => [
-                'id'          => $mr->id,
-                'type'        => 'Member Registration',
-                'requestedBy' => trim("{$mr->first_name} {$mr->last_name}"),
-                'date'        => $mr->created_at->format('M d, Y'),
-                'priority'    => 'low',
+                'id'         => $mr->id,
+                'full_name'  => trim("{$mr->first_name} {$mr->last_name}"),
+                'address'    => trim("{$mr->address_street}, {$mr->address_barangay}, {$mr->address_city}"),
+                'income'     => $mr->source_of_income,
+                'date'       => $mr->created_at->format('M d, Y'),
+                'status'     => $mr->status,
             ]);
 
         return inertia('Superadmin/Approvals', [
-            'approvals' => $pendingLoans->merge($pendingRegs)->values(),
+            'pendingLoans'         => $pendingLoans->values(),
+            'pendingRegistrations' => $pendingRegs->values(),
+            'pendingDeletions'     => \App\Models\Member::where('status', \App\Models\Member::STATUS_PENDING_DELETION)
+                ->latest()
+                ->get()
+                ->map(fn ($m) => [
+                    'id'      => $m->id,
+                    'name'    => $m->name,
+                    'contact' => $m->memberRegistration?->contact_number ?? '—',
+                    'date'    => $m->updated_at->format('M d, Y'),
+                    'priority' => 'High',
+                ])->values(),
         ]);
+    }
+
+    public function approveRegistration(MemberRegistration $memberRegistration)
+    {
+        abort_if(
+            !in_array($memberRegistration->status, [MemberRegistration::STATUS_SEMINAR_ATTENDED, 'for_bod_approval']),
+            422,
+            'Registration must have completed the seminar before approving.'
+        );
+
+        $memberRegistration->update(['status' => MemberRegistration::STATUS_APPROVED]);
+
+        // Ensure a Member record exists and set it to approved
+        \App\Models\Member::updateOrCreate(
+            ['member_registration_id' => $memberRegistration->id],
+            [
+                'name'              => trim("{$memberRegistration->first_name} {$memberRegistration->last_name}"),
+                'gender'            => $memberRegistration->gender ?? null,
+                'status'            => \App\Models\Member::STATUS_APPROVED,
+                'membership_status' => \App\Models\Member::MEMBERSHIP_GOOD,
+                'standing'          => 'active',
+                'start_date'        => now()->toDateString(),
+            ]
+        );
+
+        // Create User account only if one does not already exist
+        $email = preg_replace('/\s+/', '', $memberRegistration->contact_number) . '@kscf.local';
+        if (!User::where('email', $email)->exists()) {
+            User::create([
+                'name'              => trim("{$memberRegistration->first_name} {$memberRegistration->last_name}"),
+                'email'             => $email,
+                'password'          => 'Member@' . date('Y'),
+                'role'              => 'member',
+                'email_verified_at' => now(),
+            ]);
+        }
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($memberRegistration)
+            ->log('Member registration approved');
+
+        return back()->with('success', 'Registration approved. Member account created.');
+    }
+
+    public function rejectRegistration(Request $request, MemberRegistration $memberRegistration)
+    {
+        abort_if(
+            !in_array($memberRegistration->status, [MemberRegistration::STATUS_SEMINAR_ATTENDED, 'for_bod_approval']),
+            422,
+            'Only seminar-attended registrations can be rejected.'
+        );
+
+        $memberRegistration->update([
+            'status' => MemberRegistration::STATUS_REJECTED,
+            'notes'  => $request->input('reason'),
+        ]);
+
+        activity()->log("Member registration rejected: {$memberRegistration->first_name} {$memberRegistration->last_name}");
+
+        return back()->with('success', 'Registration rejected.');
+    }
+
+    public function approveDeletion(\App\Models\Member $member)
+    {
+        $name = $member->name;
+        $member->delete();
+
+        activity()->causedBy(auth()->user())
+            ->log('Member deletion approved — ' . $name . ' permanently removed');
+
+        return back()->with('success', 'Member ' . $name . ' deleted successfully.');
+    }
+
+    public function rejectDeletion(\App\Models\Member $member)
+    {
+        $member->update(['status' => \App\Models\Member::STATUS_APPROVED]);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log('Member deletion rejected — ' . $member->name . ' restored to approved');
+
+        return back()->with('success', 'Deletion request rejected. Member restored to active.');
     }
 
     public function settings()
@@ -356,12 +452,158 @@ class SuperadminController extends Controller
 
     public function members()
     {
+        // Pre-load all member users keyed by email for O(1) lookup (avoids N+1)
+        $memberUsers = User::where('role', 'member')->get()->keyBy('email');
+
+        $members = \App\Models\Member::with([
+                'memberRegistration.coMaker',
+                'memberRegistration.beneficiaries',
+            ])
+            ->whereNotIn('status', [\App\Models\Member::STATUS_PENDING, \App\Models\Member::STATUS_REJECTED])
+            ->latest()
+            ->get()
+            ->map(function ($m) use ($memberUsers) {
+                $reg  = $m->memberRegistration;
+                $contactEmail = $reg
+                    ? preg_replace('/\s+/', '', $reg->contact_number) . '@kscf.local'
+                    : null;
+                $user = $contactEmail ? $memberUsers->get($contactEmail) : null;
+
+                return [
+                    'id'               => $m->id,
+                    'name'             => $m->name,
+                    'first_name'       => $reg?->first_name ?? '',
+                    'last_name'        => $reg?->last_name ?? '',
+                    'email'            => $user?->email ?? '—',
+                    'email_verified_at' => $user?->email_verified_at,
+                    'created_at'       => $m->created_at->toISOString(),
+                    'user_id'          => $user?->id,
+                    'contact_number'   => $reg?->contact_number ?? '',
+                    'source_of_income' => $reg?->source_of_income ?? '',
+                    'phone'            => $reg?->contact_number ?? '',
+                    'address'          => $reg
+                        ? trim(implode(', ', array_filter([
+                            $reg->address_street,
+                            $reg->address_barangay,
+                            $reg->address_city,
+                        ])))
+                        : '',
+                    'member_since'     => $m->start_date?->format('M d, Y') ?? $m->created_at->format('M d, Y'),
+                    'share_capital'    => null,
+                    'status'           => $m->status,
+                    'membership_status' => $m->membership_status,
+                    'migs_score'       => null,
+                    'co_makers'        => $reg?->coMaker ? [[
+                        'id'             => $reg->coMaker->id,
+                        'first_name'     => $reg->coMaker->first_name,
+                        'last_name'      => $reg->coMaker->last_name,
+                        'contact_number' => $reg->coMaker->contact_number,
+                        'relationship'   => $reg->coMaker->relationship,
+                    ]] : [],
+                    'beneficiaries'    => $reg?->beneficiaries->map(fn ($b) => [
+                        'id'             => $b->id,
+                        'first_name'     => $b->first_name,
+                        'last_name'      => $b->last_name,
+                        'contact_number' => $b->contact_number,
+                        'relationship'   => $b->relationship,
+                    ])->toArray() ?? [],
+                ];
+            });
+
         return inertia('Superadmin/Members', [
-            'members' => User::where('role', 'member')
-                ->select(['id', 'name', 'email', 'email_verified_at', 'created_at'])
-                ->orderBy('name')
-                ->get(),
+            'members' => $members->values(),
         ]);
+    }
+
+    public function updateMember(Request $request, \App\Models\Member $member)
+    {
+        $reg  = $member->memberRegistration;
+        $contactEmail = $reg
+            ? preg_replace('/\s+/', '', $reg->contact_number) . '@kscf.local'
+            : null;
+        $user = $contactEmail ? User::where('email', $contactEmail)->first() : null;
+
+        $validated = $request->validate([
+            'first_name'     => 'required|string|max:255',
+            'last_name'      => 'required|string|max:255',
+            'contact_number' => 'required|string|max:20',
+            'email'          => ['required', 'email', Rule::unique('users', 'email')->ignore($user?->id)],
+            'password'       => 'nullable|min:8',
+        ]);
+
+        // Update member's stored full name
+        $fullName = trim($validated['first_name'] . ' ' . $validated['last_name']);
+        $member->update(['name' => $fullName]);
+
+        // Update registration fields
+        if ($reg) {
+            $reg->update([
+                'first_name'     => $validated['first_name'],
+                'last_name'      => $validated['last_name'],
+                'contact_number' => $validated['contact_number'],
+            ]);
+        }
+
+        // Update linked user account
+        if ($user) {
+            $accountData = ['email' => $validated['email']];
+            if (!empty($validated['password'])) {
+                $accountData['password'] = $validated['password'];
+            }
+            $user->update($accountData);
+        }
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log('Member record updated by superadmin');
+
+        return back()->with('success', 'Member updated successfully.');
+    }
+
+    public function updateMemberAccount(Request $request, \App\Models\Member $member)
+    {
+        $reg  = $member->memberRegistration;
+        $contactEmail = $reg
+            ? preg_replace('/\s+/', '', $reg->contact_number) . '@kscf.local'
+            : null;
+        $user = $contactEmail ? User::where('email', $contactEmail)->first() : null;
+
+        $validated = $request->validate([
+            'email'    => ['required', 'email', Rule::unique('users', 'email')->ignore($user?->id)],
+            'password' => 'nullable|min:8',
+        ]);
+
+        if ($user) {
+            $updateData = ['email' => $validated['email']];
+            if (!empty($validated['password'])) {
+                $updateData['password'] = $validated['password'];
+            }
+            $user->update($updateData);
+            activity()->causedBy(auth()->user())
+                ->performedOn($member)
+                ->log('Member account credentials updated by superadmin');
+        }
+
+        return back()->with('success', 'Member account updated successfully.');
+    }
+
+    public function deleteMember(\App\Models\Member $member)
+    {
+        $name = $member->name;
+
+        // Find and delete linked user account
+        $reg = $member->memberRegistration;
+        if ($reg) {
+            $email = preg_replace('/\s+/', '', $reg->contact_number) . '@kscf.local';
+            User::where('email', $email)->delete();
+        }
+
+        $member->delete();
+
+        activity()->causedBy(auth()->user())
+            ->log('Member permanently deleted by superadmin — ' . $name);
+
+        return back()->with('success', $name . ' has been permanently deleted.');
     }
 
     public function loans()

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Head } from '@inertiajs/react';
-import { Search, Eye } from 'lucide-react';
+import { Head, useForm, router, usePage } from '@inertiajs/react';
+import { Search, Eye, Pencil, Trash2, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,8 +8,30 @@ import {
     Sheet,
     SheetContent,
 } from '@/components/ui/sheet';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+interface CoMaker {
+    id: number;
+    first_name: string;
+    last_name: string;
+    contact_number?: string;
+    relationship?: string;
+}
+
+interface Beneficiary {
+    id: number;
+    first_name: string;
+    last_name: string;
+    contact_number?: string;
+    relationship?: string;
+}
 
 interface MemberUser {
     id: number;
@@ -20,6 +42,17 @@ interface MemberUser {
     migs_score?: number | null;
     phone?: string | null;
     address?: string | null;
+    first_name: string;
+    last_name: string;
+    contact_number: string;
+    source_of_income?: string;
+    user_id: number | null;
+    member_since: string;
+    share_capital: number | null;
+    status: string;
+    membership_status?: string;
+    co_makers: CoMaker[];
+    beneficiaries: Beneficiary[];
 }
 
 interface Props {
@@ -29,9 +62,22 @@ interface Props {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Members({ members }: Props) {
+    const { props } = usePage<{ flash?: { success?: string } }>();
+    const flash = props.flash;
+
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'unverified'>('all');
     const [selectedMember, setSelectedMember] = useState<MemberUser | null>(null);
+    const [editMember, setEditMember] = useState<MemberUser | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<MemberUser | null>(null);
+
+    const editForm = useForm({
+        first_name: '',
+        last_name: '',
+        contact_number: '',
+        email: '',
+        password: '',
+    });
 
     const filtered = members.filter((m) => {
         const matchSearch =
@@ -44,9 +90,150 @@ export default function Members({ members }: Props) {
         return matchSearch && matchStatus;
     });
 
+    const openEdit = (member: MemberUser) => {
+        setEditMember(member);
+        editForm.setData({
+            first_name: member.first_name || '',
+            last_name: member.last_name || '',
+            contact_number: member.contact_number || '',
+            email: member.email === '—' ? '' : member.email,
+            password: '',
+        });
+    };
+
+    const handleEdit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editMember) return;
+        editForm.put(`/superadmin/members/${editMember.id}`, {
+            onSuccess: () => setEditMember(null),
+        });
+    };
+
+    const confirmDelete = () => {
+        if (!deleteTarget) return;
+        router.delete(`/superadmin/members/${deleteTarget.id}`, {
+            onSuccess: () => setDeleteTarget(null),
+        });
+    };
+
     return (
         <>
             <Head title="All Members" />
+
+            {/* ── Edit Dialog ── */}
+            <Dialog open={!!editMember} onOpenChange={(o) => !o && setEditMember(null)}>
+                <DialogContent className="max-w-lg overflow-y-auto max-h-[90vh]">
+                    <DialogHeader>
+                        <DialogTitle>Edit Member — {editMember?.name}</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleEdit} className="space-y-4 pt-2">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-sm font-medium text-zinc-700 block mb-1">First Name</label>
+                                <Input value={editForm.data.first_name}
+                                    onChange={(e) => editForm.setData('first_name', e.target.value)} />
+                                {editForm.errors.first_name && <p className="text-red-500 text-xs mt-1">{editForm.errors.first_name}</p>}
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-zinc-700 block mb-1">Last Name</label>
+                                <Input value={editForm.data.last_name}
+                                    onChange={(e) => editForm.setData('last_name', e.target.value)} />
+                                {editForm.errors.last_name && <p className="text-red-500 text-xs mt-1">{editForm.errors.last_name}</p>}
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium text-zinc-700 block mb-1">Contact Number</label>
+                            <Input value={editForm.data.contact_number}
+                                onChange={(e) => editForm.setData('contact_number', e.target.value)} />
+                            {editForm.errors.contact_number && <p className="text-red-500 text-xs mt-1">{editForm.errors.contact_number}</p>}
+                        </div>
+
+                        <div className="border-t border-zinc-100 pt-4">
+                            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-3">Portal Account Credentials</p>
+                            <div>
+                                <label className="text-sm font-medium text-zinc-700 block mb-1">Email Address</label>
+                                <Input type="email" value={editForm.data.email}
+                                    onChange={(e) => editForm.setData('email', e.target.value)}
+                                    placeholder="member@example.com" />
+                                {editForm.errors.email && <p className="text-red-500 text-xs mt-1">{editForm.errors.email}</p>}
+                            </div>
+                            <div className="mt-3">
+                                <label className="text-sm font-medium text-zinc-700 block mb-1">
+                                    New Password <span className="text-zinc-400 font-normal">(leave blank to keep current)</span>
+                                </label>
+                                <Input type="password" value={editForm.data.password}
+                                    onChange={(e) => editForm.setData('password', e.target.value)}
+                                    placeholder="Minimum 8 characters" />
+                                {editForm.errors.password && <p className="text-red-500 text-xs mt-1">{editForm.errors.password}</p>}
+                            </div>
+                        </div>
+
+                        {/* Co-Makers — read only */}
+                        {editMember?.co_makers && editMember.co_makers.length > 0 && (
+                            <div className="border-t border-zinc-100 pt-4">
+                                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-3">Co-Makers</p>
+                                {editMember.co_makers.map((c) => (
+                                    <div key={c.id} className="flex justify-between text-sm py-1.5 border-b border-zinc-50">
+                                        <span className="text-zinc-700">{c.first_name} {c.last_name}</span>
+                                        <span className="text-zinc-400">{c.relationship ?? '—'}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Beneficiaries — read only */}
+                        {editMember?.beneficiaries && editMember.beneficiaries.length > 0 && (
+                            <div className="border-t border-zinc-100 pt-4">
+                                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-3">Beneficiaries</p>
+                                {editMember.beneficiaries.map((b) => (
+                                    <div key={b.id} className="flex justify-between text-sm py-1.5 border-b border-zinc-50">
+                                        <span className="text-zinc-700">{b.first_name} {b.last_name}</span>
+                                        <span className="text-zinc-400">{b.relationship ?? '—'}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 pt-2">
+                            <Button type="submit" disabled={editForm.processing}
+                                className="flex-1 bg-[#2d5a27] hover:bg-[#1e3e1a] text-white">
+                                {editForm.processing ? 'Saving…' : 'Save Changes'}
+                            </Button>
+                            <Button type="button" variant="outline"
+                                onClick={() => setEditMember(null)} className="flex-1">
+                                Cancel
+                            </Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Delete Confirmation Dialog ── */}
+            <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Delete Member</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-3">
+                        <p className="text-sm text-zinc-600">
+                            Are you sure you want to permanently delete
+                            <span className="font-bold text-zinc-900"> {deleteTarget?.name}</span>?
+                        </p>
+                        <p className="text-xs text-red-500 mt-2">
+                            ⚠️ This will also delete their portal account. This action cannot be undone.
+                        </p>
+                    </div>
+                    <div className="flex gap-3">
+                        <Button onClick={confirmDelete}
+                            className="flex-1 bg-red-600 hover:bg-red-700 text-white">
+                            Yes, Delete Permanently
+                        </Button>
+                        <Button variant="outline" onClick={() => setDeleteTarget(null)} className="flex-1">
+                            Cancel
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             <div className="p-6 space-y-6 max-w-5xl mx-auto">
                 <div>
@@ -58,6 +245,14 @@ export default function Members({ members }: Props) {
                         View and manage all registered cooperative members.
                     </p>
                 </div>
+
+                {/* Flash */}
+                {flash?.success && (
+                    <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3 text-sm font-medium">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        {flash.success}
+                    </div>
+                )}
 
                 <Card className="border border-zinc-200 shadow-sm">
                     <CardHeader className="pb-3">
@@ -126,11 +321,20 @@ export default function Members({ members }: Props) {
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3 text-right">
-                                                <Button variant="ghost" size="sm"
-                                                    className="h-7 px-2 text-zinc-400 hover:text-[#2d5a27] gap-1 text-xs"
-                                                    onClick={() => setSelectedMember(m)}>
-                                                    <Eye className="w-3.5 h-3.5" /> View
-                                                </Button>
+                                                <div className="flex items-center justify-end gap-3">
+                                                    <button onClick={() => setSelectedMember(m)}
+                                                        className="flex items-center gap-1 text-xs text-[#2d5a27] hover:underline font-medium">
+                                                        <Eye className="w-3.5 h-3.5" /> View
+                                                    </button>
+                                                    <button onClick={() => openEdit(m)}
+                                                        className="flex items-center gap-1 text-xs text-blue-600 hover:underline font-medium">
+                                                        <Pencil className="w-3.5 h-3.5" /> Edit
+                                                    </button>
+                                                    <button onClick={() => setDeleteTarget(m)}
+                                                        className="flex items-center gap-1 text-xs text-red-500 hover:underline font-medium">
+                                                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
