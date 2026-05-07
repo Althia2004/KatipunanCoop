@@ -31,35 +31,52 @@ function renderMenu(items: NavItem[], isCurrentUrl: (href: NavItem['href']) => b
 }
 
 export function NavMain({
+    overviewItems = [],
+    overviewLabel = 'Overview',
     featureItems = [],
+    featureLabel = 'Features',
     loanItems = [],
+    loanLabel = 'Loan Management',
     userItems = [],
+    userLabel = 'User Management',
 }: {
+    overviewItems?: NavItem[];
+    overviewLabel?: string;
     featureItems: NavItem[];
+    featureLabel?: string;
     loanItems: NavItem[];
+    loanLabel?: string;
     userItems: NavItem[];
+    userLabel?: string;
 }) {
     const { isCurrentUrl } = useCurrentUrl();
 
     return (
         <>
+            {overviewItems.length > 0 && (
+                <SidebarGroup className="px-2 py-0">
+                    <SidebarGroupLabel>{overviewLabel}</SidebarGroupLabel>
+                    {renderMenu(overviewItems, isCurrentUrl)}
+                </SidebarGroup>
+            )}
+
             {featureItems.length > 0 && (
                 <SidebarGroup className="px-2 py-0">
-                    <SidebarGroupLabel>Features</SidebarGroupLabel>
+                    <SidebarGroupLabel>{featureLabel}</SidebarGroupLabel>
                     {renderMenu(featureItems, isCurrentUrl)}
                 </SidebarGroup>
             )}
 
             {loanItems.length > 0 && (
                 <SidebarGroup className="px-2 py-0">
-                    <SidebarGroupLabel>Loan Management</SidebarGroupLabel>
+                    <SidebarGroupLabel>{loanLabel}</SidebarGroupLabel>
                     {renderMenu(loanItems, isCurrentUrl)}
                 </SidebarGroup>
             )}
 
             {userItems.length > 0 && (
                 <SidebarGroup className="px-2 py-0">
-                    <SidebarGroupLabel>User Management</SidebarGroupLabel>
+                    <SidebarGroupLabel>{userLabel}</SidebarGroupLabel>
                     {renderMenu(userItems, isCurrentUrl)}
                 </SidebarGroup>
             )}

@@ -50,7 +50,8 @@ class LoanManagementController extends Controller
             'interest_rate' => 1.00, // Default starting rate
         ]);
 
-        return redirect()->route('loan.management');
+        return redirect()->route('member.dashboard', ['tab' => 'loan-application'])
+            ->with('success', 'Loan request submitted successfully.');
     }
 
     public function approve(LoanRequest $loanRequest, Request $request)

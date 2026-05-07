@@ -57,6 +57,11 @@ Route::post('/member/logout', [MemberAuthController::class, 'logout'])->name('me
 // ── Coming-Soon role-based dashboard placeholders ──
 Route::middleware(['auth'])->group(function () {
     Route::get('/member/dashboard', [MemberAuthController::class, 'dashboard'])->name('member.dashboard');
+    Route::inertia('/member/loan-application', 'member/LoanManagement')->name('member.loan.application');
+    Route::inertia('/member/loan-tracking', 'member/LoanTracking')->name('member.loan.tracking');
+    Route::inertia('/member/view-savings', 'member/ViewSavings')->name('member.view.savings');
+    Route::inertia('/member/view-return-patronage', 'member/ViewPatronageRefund')->name('member.view.patronage');
+    Route::inertia('/member/reports', 'member/ReportDownloads')->name('member.reports');
     Route::inertia('/admin/dashboard',      'ComingSoon', ['page' => 'Admin Dashboard'])->name('admin.dashboard');
     Route::inertia('/manager/dashboard',    'ComingSoon', ['page' => 'Manager Dashboard'])->name('manager.dashboard');
     Route::inertia('/board/dashboard',      'ComingSoon', ['page' => 'Board of Directors Dashboard'])->name('board.dashboard');
