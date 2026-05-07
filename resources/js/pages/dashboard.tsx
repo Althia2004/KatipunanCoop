@@ -35,6 +35,13 @@ interface DashboardProps {
     pending_approvals: number;
     upcoming_seminars: number;
     active_loans: number;
+    pending_loan_approvals?: number;
+    recent_loan_requests?: Array<{
+        id: number;
+        amount: number;
+        requestedBy: string;
+        date: string;
+    }>;
 }
 
 // ─── Page ────────────────────────────────────────────────────────────────────
@@ -44,6 +51,8 @@ export default function Dashboard({
     pending_approvals,
     upcoming_seminars,
     active_loans,
+    pending_loan_approvals,
+    recent_loan_requests,
 }: DashboardProps) {
     const { auth } = usePage<{ auth: Auth }>().props;
     const firstName = auth.user.name.split(' ')[0];
@@ -110,6 +119,16 @@ export default function Dashboard({
         },
     ];
 
+    // Add pending loan approvals stat if user is admin/superadmin
+    if (pending_loan_approvals !== undefined) {
+        stats.splice(1, 0, {
+            icon: Clock,
+            label: 'Pending Loan Approvals',
+            value: pending_loan_approvals,
+            accent: 'bg-red-50 text-red-600',
+        });
+    }
+
     // Duplicate for seamless infinite scroll
     const scrollItems = [...BOD_MEMBERS, ...BOD_MEMBERS];
 
@@ -171,6 +190,36 @@ export default function Dashboard({
                         ))}
                     </div>
                 </div>
+
+                {/* ── Recent Loan Requests ── */}
+                {recent_loan_requests && recent_loan_requests.length > 0 && (
+                    <div>
+                        <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-4">
+                            Recent Loan Requests
+                        </h2>
+                        <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm">
+                            <div className="space-y-4">
+                                {recent_loan_requests.map((request) => (
+                                    <div key={request.id} className="flex items-center justify-between py-3 border-b border-zinc-100 last:border-b-0">
+                                        <div>
+                                            <p className="font-medium text-zinc-800">{request.requestedBy}</p>
+                                            <p className="text-sm text-zinc-500">₱{request.amount.toLocaleString()}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-sm text-zinc-500">{request.date}</p>
+                                            <Link
+                                                href="/loan/management"
+                                                className="text-sm text-[#459245] hover:text-[#3D582F] font-medium"
+                                            >
+                                                Review →
+                                            </Link>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* ── Board of Directors ── */}
                 <div>

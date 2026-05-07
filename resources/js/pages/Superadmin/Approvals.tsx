@@ -17,7 +17,7 @@ interface PendingRegistration {
 
 interface PendingLoan {
     id: number;
-    amount: number;
+    amount: number | string;
     requestedBy: string;
     date: string;
 }
@@ -38,8 +38,8 @@ interface Props {
 
 // ── Peso formatter ────────────────────────────────────────────────────────────
 
-const peso = (n: number) =>
-    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(n);
+const peso = (n: number | string) =>
+    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(n || 0));
 
 // ── Confirm Dialog ────────────────────────────────────────────────────────────
 
@@ -106,6 +106,11 @@ export default function Approvals({ pendingRegistrations, pendingLoans, pendingD
         name: string;
     } | null>(null);
 
+    const [loanConfirm, setLoanConfirm] = useState<{
+        id: number;
+        name: string;
+    } | null>(null);
+
     const [deletionAction, setDeletionAction] = useState<{
         type: 'approve-deletion' | 'reject-deletion';
         id: number;
@@ -120,6 +125,10 @@ export default function Approvals({ pendingRegistrations, pendingLoans, pendingD
         setConfirmAction({ type: 'reject', id, name });
     };
 
+    const handleLoanApprove = (id: number, name: string) => {
+        setLoanConfirm({ id, name });
+    };
+
     const doAction = (reason?: string) => {
         if (!confirmAction) return;
         const { type, id } = confirmAction;
@@ -130,6 +139,18 @@ export default function Approvals({ pendingRegistrations, pendingLoans, pendingD
         } else {
             router.patch(`/superadmin/approvals/registration/${id}/reject`, { reason });
         }
+    };
+
+    const doLoanApprove = () => {
+        if (!loanConfirm) return;
+        const { id } = loanConfirm;
+        setLoanConfirm(null);
+        router.patch(`/loan/request/${id}/approve`, { interest_rate: 1.0 }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                window.location.reload();
+            },
+        });
     };
 
     const doDeletionAction = () => {
@@ -167,6 +188,17 @@ export default function Approvals({ pendingRegistrations, pendingLoans, pendingD
                     showReason={confirmAction.type === 'reject'}
                     onConfirm={doAction}
                     onCancel={() => setConfirmAction(null)}
+                />
+            )}
+
+            {loanConfirm && (
+                <ConfirmDialog
+                    title="Approve Loan Request"
+                    message={`Approve the loan request submitted by ${loanConfirm.name}?`}
+                    confirmLabel="Approve Loan"
+                    confirmClass="bg-green-600 hover:bg-green-700 text-white"
+                    onConfirm={doLoanApprove}
+                    onCancel={() => setLoanConfirm(null)}
                 />
             )}
 
@@ -311,13 +343,12 @@ export default function Approvals({ pendingRegistrations, pendingLoans, pendingD
                                                 <td className="px-4 py-3 text-zinc-400 text-xs">{loan.date}</td>
                                                 <td className="px-4 py-3 text-right">
                                                     <div className="flex items-center justify-end gap-2">
-                                                        <Button size="sm"
-                                                            className="h-7 px-3 bg-green-600 hover:bg-green-700 text-white text-xs gap-1">
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => handleLoanApprove(loan.id, loan.requestedBy)}
+                                                            className="h-7 px-3 bg-green-600 hover:bg-green-700 text-white text-xs gap-1"
+                                                        >
                                                             <CheckCircle2 className="w-3.5 h-3.5" /> Approve
-                                                        </Button>
-                                                        <Button size="sm" variant="outline"
-                                                            className="h-7 px-3 border-red-200 text-red-600 hover:bg-red-50 text-xs gap-1">
-                                                            <XCircle className="w-3.5 h-3.5" /> Reject
                                                         </Button>
                                                     </div>
                                                 </td>

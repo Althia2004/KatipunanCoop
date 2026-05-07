@@ -12,7 +12,7 @@ class SuperadminMiddleware
     {
         $user = $request->user();
 
-        if (! $user || $user->role !== 'superadmin') {
+        if (! $user || !in_array($user->role, ['superadmin', 'admin'])) {
             if ($user) {
                 return redirect()->route($user->dashboardRouteName());
             }

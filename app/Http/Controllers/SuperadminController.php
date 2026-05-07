@@ -25,6 +25,7 @@ class SuperadminController extends Controller
             ->map(fn ($lr) => [
                 'id'          => $lr->id,
                 'type'        => 'Loan Approval',
+                'amount'      => $lr->amount,
                 'requestedBy' => $lr->requestedBy?->name ?? 'Unknown',
                 'date'        => $lr->created_at->format('M d, Y'),
                 'priority'    => 'medium',
@@ -136,7 +137,7 @@ class SuperadminController extends Controller
             ->get()
             ->map(fn ($lr) => [
                 'id'          => $lr->id,
-                'amount'      => $lr->principal_amount,
+                'amount'      => $lr->amount,
                 'requestedBy' => $lr->requestedBy?->name ?? 'Unknown',
                 'date'        => $lr->created_at->format('M d, Y'),
             ]);

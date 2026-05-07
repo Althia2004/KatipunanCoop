@@ -12,6 +12,9 @@ class LoanManagementController extends Controller
 {
     public function index(): Response
     {
+        $user = auth()->user();
+        abort_unless($user?->isSuperadmin() || $user?->isAdmin(), 403);
+
         $loanRequests = LoanRequest::with('requestedBy')->get()->map(function (LoanRequest $loanRequest) {
             return [
                 'id' => $loanRequest->id,
@@ -58,7 +61,7 @@ class LoanManagementController extends Controller
     {
         $user = $request->user();
 
-        abort_unless($user?->isSuperadmin(), 403);
+        abort_unless($user?->isSuperadmin() || $user?->isAdmin(), 403);
         abort_unless($loanRequest->status === LoanRequest::STATUS_PENDING, 403);
 
         $validated = $request->validate([
