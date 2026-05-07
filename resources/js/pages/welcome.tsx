@@ -7,9 +7,7 @@ import {
     GraduationCap, UserCheck, IdCard, Quote, ChevronRight,
     BadgeCheck,
 } from 'lucide-react';
-import MemberLoginModal from '@/components/member-login-modal';
 import AdminLoginModal from '@/components/admin-login-modal';
-import { dashboard } from '@/routes';
 
 // ── static data ──────────────────────────────────────────────────────────────
 
@@ -75,18 +73,27 @@ export default function Welcome({
     canResetPassword?: boolean;
 }) {
     const [menuOpen, setMenuOpen] = useState(false);
-    const [memberModalOpen, setMemberModalOpen] = useState(false);
     const [adminModalOpen, setAdminModalOpen] = useState(false);
     const [scrolled, setScrolled] = useState(false);
 
     const { auth, currentTeam } = usePage().props as {
-        auth: { user?: object };
+        auth: { user?: { role?: string } };
         currentTeam?: { slug: string };
     };
 
-    const dashboardUrl = currentTeam
-        ? dashboard.url({ current_team: currentTeam.slug })
-        : '/';
+    const getDashboardUrl = () => {
+        const role = auth.user?.role;
+        if (role === 'superadmin') return '/superadmin/dashboard';
+        if (role === 'member') return '/member/dashboard';
+        if (role === 'manager') return '/manager/dashboard';
+        if (role === 'board') return '/board/dashboard';
+        if (role === 'bookkeeper') return '/bookkeeper/dashboard';
+        if (role === 'hr') return '/hr/dashboard';
+        if (currentTeam?.slug) return `/${currentTeam.slug}/dashboard`;
+        return '/dashboard';
+    };
+
+    const dashboardUrl = getDashboardUrl();
 
     useEffect(() => {
         const handler = () => setScrolled(window.scrollY > 10);
@@ -129,7 +136,7 @@ export default function Welcome({
                             <img
                                src="/images/Sample - Logo(KSCF MPC).png"
                                 alt="KSCFMPC Logo"
-                                className="w-10 h-10 rounded-full object-cover shrink-0"
+                                className="w-10 h-10 rounded-full object-cover shrink-0 mix-blend-multiply bg-transparent"
                             />
                         <div className="leading-tight">
                             <p className="font-bold text-[#2d5a27] text-sm">KSCFMPC</p>
@@ -156,10 +163,10 @@ export default function Welcome({
                             </Link>
                         ) : (
                             <>
-                                <button onClick={() => setMemberModalOpen(true)}
-                                    className="px-4 py-2 border-2 border-[#c8920a] text-[#c8920a] text-sm font-semibold rounded-lg hover:bg-[#c8920a]/10 transition">
+                                <Link href="/member/login"
+                                    className="px-4 py-2 border-2 border-[#2d5a27] text-[#2d5a27] text-sm font-semibold rounded-lg hover:bg-[#2d5a27] hover:text-white transition">
                                     Member Portal
-                                </button>
+                                </Link>
                                 <button onClick={() => setAdminModalOpen(true)}
                                     className="px-4 py-2 bg-[#2d5a27] text-white text-sm font-semibold rounded-lg hover:bg-[#1e3e1a] transition">
                                     Login
@@ -185,10 +192,11 @@ export default function Welcome({
                             </a>
                         ))}
                         <div className="flex gap-3 pt-2">
-                            <button onClick={() => { setMemberModalOpen(true); setMenuOpen(false); }}
-                                className="flex-1 py-2.5 border-2 border-[#c8920a] text-[#c8920a] text-sm font-semibold rounded-lg">
+                            <Link href="/member/login"
+                                onClick={() => setMenuOpen(false)}
+                                className="flex-1 py-2.5 border-2 border-[#2d5a27] text-[#2d5a27] text-sm font-semibold rounded-lg text-center hover:bg-[#2d5a27] hover:text-white transition">
                                 Member Portal
-                            </button>
+                            </Link>
                             <button onClick={() => { setAdminModalOpen(true); setMenuOpen(false); }}
                                 className="flex-1 py-2.5 bg-[#2d5a27] text-white text-sm font-semibold rounded-lg">
                                 Login
@@ -219,7 +227,8 @@ export default function Welcome({
                                     className="px-6 py-3 bg-[#2d5a27] text-white font-semibold rounded-xl hover:bg-[#1e3e1a] transition">
                                     Learn More
                                 </a>
-                                <button onClick={() => setMemberModalOpen(true)}
+                                <button
+                                    onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
                                     className="px-6 py-3 border-2 border-[#2d5a27] text-[#2d5a27] font-semibold rounded-xl hover:bg-[#2d5a27]/5 transition">
                                     Become a Member
                                 </button>
@@ -239,7 +248,7 @@ export default function Welcome({
                                 <div className="relative">
                                     <div className="absolute inset-0 rounded-full bg-[#2d5a27]/20 blur-3xl scale-125" />
                                     <img
-                                        src="/images/Sample - Logo(KSCF MPC).png"
+                                        src="/images/katipunanLogo.png"
                                         alt="KSCFMPC Logo"
                                         className="relative w-56 h-56 lg:w-72 lg:h-72 object-contain drop-shadow-2xl"
                                     />
@@ -354,7 +363,7 @@ export default function Welcome({
                 </section>
 
                 {/* ── Membership Steps ── */}
-                <section className="py-20 px-4 bg-white">
+                <section id="how-it-works" className="py-20 px-4 bg-white">
                     <div className="max-w-7xl mx-auto">
                         <h2 className="text-3xl font-bold text-center text-[#1a1a1a] mb-3">Becoming a Member is Simple</h2>
                         <p className="text-zinc-500 text-center mb-14">Follow these 4 steps to join our cooperative family</p>
@@ -561,7 +570,6 @@ export default function Welcome({
             </footer>
 
             {/* ── Modals ── */}
-            <MemberLoginModal open={memberModalOpen} onOpenChange={setMemberModalOpen} />
             <AdminLoginModal open={adminModalOpen} onOpenChange={setAdminModalOpen} canResetPassword={canResetPassword} />
         </>
     );

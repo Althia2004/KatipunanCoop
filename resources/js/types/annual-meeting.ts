@@ -37,10 +37,23 @@ export interface AnnualMeeting {
     status: MeetingStatus;
     overview: string | null;
     is_pinned: boolean;
+    seminar_id?: number | null;
+    seminar_title?: string | null;
+    participants_count?: number;
+    registered_count?: number;
+    attendance_pct?: number;
+    action_items_count?: number;
     key_points?: AnnualMeetingKeyPoint[];
     action_items?: AnnualMeetingActionItem[];
     next_steps?: AnnualMeetingNextStep[];
     participants?: AnnualMeetingParticipant[];
+}
+
+export interface SeminarOption {
+    id: number;
+    title: string;
+    scheduled_at: string | null;
+    participants_count: number;
 }
 
 export interface AnnualMeetingStats {
@@ -48,6 +61,7 @@ export interface AnnualMeetingStats {
     avgDuration: number | null;
     attendancePct: number;
     engagementPct: number;
+    totalMembers?: number;
 }
 
 export interface ChartDataPoint {

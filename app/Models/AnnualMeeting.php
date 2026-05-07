@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AnnualMeeting extends Model
@@ -19,6 +20,7 @@ class AnnualMeeting extends Model
         'status',
         'overview',
         'is_pinned',
+        'seminar_id',
     ];
 
     protected $casts = [
@@ -44,6 +46,11 @@ class AnnualMeeting extends Model
     public function participants(): HasMany
     {
         return $this->hasMany(AnnualMeetingParticipant::class);
+    }
+
+    public function seminar(): BelongsTo
+    {
+        return $this->belongsTo(Seminar::class);
     }
 
     /** Duration in minutes between time_start and time_end. */

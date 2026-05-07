@@ -121,4 +121,108 @@ class MemberController extends Controller
             'message' => 'Member rejected successfully.',
         ]);
     }
+
+    // ── Inertia page ──────────────────────────────────────────────────────────
+
+    /**
+     * Render the Member Management Inertia page with member data as props.
+     */
+    public function memberManagement(): Response
+    {
+        $members = Member::whereNotIn('status', [Member::STATUS_PENDING, Member::STATUS_REJECTED])
+            ->with('memberRegistration:id,first_name,last_name,contact_number,source_of_income,date_of_birth,address_street,address_barangay,address_city')
+            ->latest()
+            ->get()
+            ->map(fn ($m) => [
+                'id'               => $m->id,
+                'name'             => $m->name,
+                'first_name'       => $m->memberRegistration?->first_name ?? '',
+                'last_name'        => $m->memberRegistration?->last_name ?? '',
+                'contact_number'   => $m->memberRegistration?->contact_number ?? '',
+                'source_of_income' => $m->memberRegistration?->source_of_income ?? '',
+                'date_of_birth'    => $m->memberRegistration?->date_of_birth?->format('M d, Y') ?? null,
+                'address'          => $m->memberRegistration
+                    ? trim(implode(', ', array_filter([
+                        $m->memberRegistration->address_street,
+                        $m->memberRegistration->address_barangay,
+                        $m->memberRegistration->address_city,
+                    ])))
+                    : '',
+                'gender'           => $m->gender,
+                'status'           => $m->status,
+                'membership_status' => $m->membership_status,
+                'standing'         => $m->standing,
+                'start_date'       => $m->start_date?->format('M d, Y'),
+                'last_login'       => $m->last_login?->format('M d, Y g:i A'),
+            ]);
+
+        return Inertia::render('User/MemberManagement', [
+            'members' => $members->values(),
+        ]);
+    }
+
+    /**
+     * Update member's editable fields (Inertia PATCH).
+     */
+    public function updateMember(Request $request, Member $member): RedirectResponse
+    {
+        $validated = $request->validate([
+            'first_name'       => 'required|string|max:255',
+            'last_name'        => 'required|string|max:255',
+            'contact_number'   => 'required|string|max:20',
+            'source_of_income' => 'nullable|string|max:255',
+        ]);
+
+        $fullName = trim($validated['first_name'] . ' ' . $validated['last_name']);
+        $member->update(['name' => $fullName]);
+
+        if ($member->memberRegistration) {
+            $member->memberRegistration->update([
+                'first_name'       => $validated['first_name'],
+                'last_name'        => $validated['last_name'],
+                'contact_number'   => $validated['contact_number'],
+                'source_of_income' => $validated['source_of_income'],
+            ]);
+        }
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log('Member record updated');
+
+        return back()->with('success', 'Member updated successfully.');
+    }
+
+    /**
+     * Toggle member status between active and suspended (Inertia PATCH).
+     */
+    public function toggleStatus(Member $member): RedirectResponse
+    {
+        $newStatus = $member->status === Member::STATUS_SUSPENDED
+            ? Member::STATUS_ACTIVE
+            : Member::STATUS_SUSPENDED;
+
+        $member->update(['status' => $newStatus]);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log('Member status changed to ' . $newStatus);
+
+        return back()->with('success', 'Member status updated to ' . $newStatus . '.');
+    }
+
+    /**
+     * Request member deletion — sets status to pending_deletion (Inertia PATCH).
+     */
+    public function requestDeletion(Member $member): RedirectResponse
+    {
+        abort_if($member->status === Member::STATUS_PENDING_DELETION, 422, 'Deletion already requested.');
+
+        $member->update(['status' => Member::STATUS_PENDING_DELETION]);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log('Member deletion requested — awaiting superadmin approval');
+
+        return back()->with('success', 'Deletion request submitted. Awaiting Superadmin approval.');
+    }
 }

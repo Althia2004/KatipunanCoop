@@ -1,18 +1,22 @@
 import React from 'react';
-import { Eye, Edit, Lock, Trash2 } from 'lucide-react';
+import { Eye, Edit, Lock, LockOpen, Trash2 } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 
 export interface Member {
     id: number;
     name: string;
+    first_name: string;
+    last_name: string;
+    contact_number: string;
+    source_of_income: string;
+    date_of_birth: string | null;
+    address: string;
     gender: string;
-    status: 'pending' | 'approved' | 'rejected';
+    status: 'pending' | 'approved' | 'rejected' | 'active' | 'suspended' | 'pending_deletion';
     membership_status: 'good' | 'warning' | 'non-compliant';
     standing: string;
     start_date: string | null;
     last_login: string | null;
-    created_at: string;
-    updated_at: string;
 }
 
 interface MemberTableProps {
@@ -76,7 +80,10 @@ export default function MemberTable({
                 </thead>
                 <tbody>
                     {members.map((member) => (
-                        <tr key={member.id} className="border-b border-zinc-200 hover:bg-zinc-50">
+                        <tr
+                            key={member.id}
+                            className={`border-b border-zinc-200 hover:bg-zinc-50 ${member.status === 'pending_deletion' ? 'bg-amber-50/40' : ''}`}
+                        >
                             <td className="px-6 py-4 text-sm text-zinc-900">#{member.id}</td>
                             <td className="px-6 py-4 text-sm font-medium text-zinc-900">{member.name}</td>
                             <td className="px-6 py-4">
@@ -90,34 +97,59 @@ export default function MemberTable({
                             <td className="px-6 py-4 text-sm text-zinc-700 capitalize">{member.gender}</td>
                             <td className="px-6 py-4">
                                 <div className="flex items-center gap-2">
+                                    {/* View */}
                                     <button
                                         onClick={() => onView(member)}
-                                        className="rounded-lg p-2 text-zinc-600 hover:bg-blue-50 hover:text-blue-600"
+                                        className="rounded-lg p-2 text-zinc-600 hover:bg-blue-50 hover:text-blue-600 transition"
                                         title="View"
                                     >
                                         <Eye className="h-4 w-4" />
                                     </button>
-                                    <button
-                                        onClick={() => onEdit(member)}
-                                        className="rounded-lg p-2 text-zinc-600 hover:bg-amber-50 hover:text-amber-600"
-                                        title="Edit"
-                                    >
-                                        <Edit className="h-4 w-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => onLock(member)}
-                                        className="rounded-lg p-2 text-zinc-600 hover:bg-purple-50 hover:text-purple-600"
-                                        title="Lock"
-                                    >
-                                        <Lock className="h-4 w-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => onDelete(member)}
-                                        className="rounded-lg p-2 text-zinc-600 hover:bg-red-50 hover:text-red-600"
-                                        title="Delete"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </button>
+
+                                    {/* Edit — disabled while pending deletion */}
+                                    {member.status !== 'pending_deletion' && (
+                                        <button
+                                            onClick={() => onEdit(member)}
+                                            className="rounded-lg p-2 text-zinc-600 hover:bg-amber-50 hover:text-amber-600 transition"
+                                            title="Edit"
+                                        >
+                                            <Edit className="h-4 w-4" />
+                                        </button>
+                                    )}
+
+                                    {/* Lock / Unlock — disabled while pending deletion */}
+                                    {member.status !== 'pending_deletion' && (
+                                        <button
+                                            onClick={() => onLock(member)}
+                                            className={`rounded-lg p-2 transition ${
+                                                member.status === 'suspended'
+                                                    ? 'text-red-500 hover:bg-red-50 hover:text-red-700'
+                                                    : 'text-zinc-400 hover:bg-purple-50 hover:text-purple-600'
+                                            }`}
+                                            title={member.status === 'suspended' ? 'Reactivate Member' : 'Suspend Member'}
+                                        >
+                                            {member.status === 'suspended' ? (
+                                                <Lock className="h-4 w-4" />
+                                            ) : (
+                                                <LockOpen className="h-4 w-4" />
+                                            )}
+                                        </button>
+                                    )}
+
+                                    {/* Delete / Pending Deletion badge */}
+                                    {member.status === 'pending_deletion' ? (
+                                        <span className="text-xs text-amber-600 font-medium px-2 py-0.5 bg-amber-100 rounded-full whitespace-nowrap">
+                                            Pending Deletion
+                                        </span>
+                                    ) : (
+                                        <button
+                                            onClick={() => onDelete(member)}
+                                            className="rounded-lg p-2 text-zinc-400 hover:bg-red-50 hover:text-red-600 transition"
+                                            title="Request Deletion"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
+                                    )}
                                 </div>
                             </td>
                         </tr>

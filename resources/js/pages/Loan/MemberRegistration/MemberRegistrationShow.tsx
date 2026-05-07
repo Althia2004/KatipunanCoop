@@ -3,7 +3,7 @@ import { useState } from 'react';
 import {
     ChevronLeft, Calendar, MapPin, Phone, User, Users, Heart,
     CheckCircle2, Clock, Circle, ChevronRight, Plus, Pencil,
-    Trash2, BookOpenCheck, Send, X, Check,
+    Trash2, BookOpenCheck, X, Check, KeyRound,
 } from 'lucide-react';
 import type {
     MemberRegistration,
@@ -17,6 +17,8 @@ import type {
 interface Props {
     registration: MemberRegistration;
     availableSeminars: AvailableSeminar[];
+    has_account: boolean;
+    account_email: string | null;
 }
 
 // ── Status Stepper ───────────────────────────────────────────────────────────
@@ -25,7 +27,6 @@ const STATUS_STEPS: { status: RegistrationStatus; label: string }[] = [
     { status: 'pending',           label: 'Pending' },
     { status: 'seminar_scheduled', label: 'Seminar Scheduled' },
     { status: 'seminar_attended',  label: 'Seminar Attended' },
-    { status: 'for_bod_approval',  label: 'For BOD Approval' },
     { status: 'approved',          label: 'Approved' },
 ];
 
@@ -33,8 +34,8 @@ const STATUS_ORDER: Record<RegistrationStatus, number> = {
     pending:           0,
     seminar_scheduled: 1,
     seminar_attended:  2,
-    for_bod_approval:  3,
-    approved:          4,
+    for_bod_approval:  2,
+    approved:          3,
     rejected:          -1,
 };
 
@@ -52,8 +53,8 @@ function StatusStepper({ current }: { current: RegistrationStatus }) {
                 <div className="flex items-center gap-3 p-4 bg-red-50 rounded-xl border border-red-100">
                     <X className="w-5 h-5 text-red-500" />
                     <div>
-                        <p className="font-bold text-red-700">Rejected by BOD</p>
-                        <p className="text-sm text-red-500">This application was not approved.</p>
+                        <p className="font-bold text-red-700">Rejected</p>
+                        <p className="text-sm text-red-500">This application was not approved by the superadmin.</p>
                     </div>
                 </div>
             ) : (
@@ -216,7 +217,7 @@ function BeneficiaryModal({
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-export default function MemberRegistrationShow({ registration, availableSeminars }: Props) {
+export default function MemberRegistrationShow({ registration, availableSeminars, has_account, account_email }: Props) {
     const [beneficiaryModal, setBeneficiaryModal] = useState<'add' | Beneficiary | null>(null);
 
     // Assign seminar form
@@ -226,14 +227,16 @@ export default function MemberRegistrationShow({ registration, availableSeminars
         assignForm.patch(`/loan/member-registration/${registration.id}/assign-seminar`);
     };
 
+    // Account assignment form
+    const accountForm = useForm({ email: '', password: '' });
+    const handleAssignAccount = (e: React.FormEvent) => {
+        e.preventDefault();
+        accountForm.post(`/loan/member-registration/${registration.id}/assign-account`);
+    };
+
     // Confirm attendance
     const handleConfirmAttendance = () => {
         router.patch(`/loan/member-registration/${registration.id}/confirm-attendance`);
-    };
-
-    // Endorse to BOD
-    const handleEndorseToBod = () => {
-        router.patch(`/loan/member-registration/${registration.id}/endorse-to-bod`);
     };
 
     // Delete beneficiary
@@ -314,18 +317,63 @@ export default function MemberRegistrationShow({ registration, availableSeminars
                         </button>
                     )}
 
-                    {/* Endorse to BOD */}
+                    {/* Awaiting superadmin approval */}
                     {registration.status === 'seminar_attended' && (
-                        <button
-                            onClick={handleEndorseToBod}
-                            className="flex items-center gap-2 px-5 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition shadow-sm active:scale-95"
-                        >
-                            <Send className="w-4 h-4" />
-                            Endorse to BOD
-                        </button>
+                        <div className="flex items-center gap-2 px-5 py-3 bg-zinc-100 text-zinc-500 rounded-xl text-sm font-medium border border-zinc-200">
+                            <Clock className="w-4 h-4" />
+                            Awaiting superadmin approval
+                        </div>
                     )}
                 </div>
 
+                {/* Account Assignment */}
+{['for_bod_approval', 'seminar_attended', 'approved'].includes(registration.status) && (
+    <DetailCard title="Member Portal Access" icon={KeyRound}>
+        {has_account ? (
+            <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-700 text-sm font-medium">
+                <CheckCircle2 className="w-5 h-5 shrink-0" />
+                Portal account already created — <span className="font-bold">{account_email}</span>
+            </div>
+        ) : (
+            <form onSubmit={handleAssignAccount} className="space-y-4">
+                <p className="text-sm text-zinc-500">
+                    Assign login credentials for this member's portal account.
+                </p>
+                <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-xs font-bold text-zinc-600 mb-1">Email Address *</label>
+                        <input
+                            type="email"
+                            value={accountForm.data.email}
+                            onChange={e => accountForm.setData('email', e.target.value)}
+                            placeholder="member@example.com"
+                            className={`w-full text-zinc-900 bg-zinc-50 rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-[#4c9f5f] focus:border-[#4c9f5f] outline-none transition-all ${accountForm.errors.email ? 'border-red-400' : 'border-zinc-300'}`}
+                        />
+                        {accountForm.errors.email && <p className="text-red-500 text-xs mt-0.5">{accountForm.errors.email}</p>}
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-zinc-600 mb-1">Password *</label>
+                        <input
+                            type="password"
+                            value={accountForm.data.password}
+                            onChange={e => accountForm.setData('password', e.target.value)}
+                            placeholder="Minimum 8 characters"
+                            className={`w-full text-zinc-900 bg-zinc-50 rounded-lg border p-2.5 text-sm focus:ring-2 focus:ring-[#4c9f5f] focus:border-[#4c9f5f] outline-none transition-all ${accountForm.errors.password ? 'border-red-400' : 'border-zinc-300'}`}
+                        />
+                        {accountForm.errors.password && <p className="text-red-500 text-xs mt-0.5">{accountForm.errors.password}</p>}
+                    </div>
+                </div>
+                <button
+                    type="submit"
+                    disabled={accountForm.processing}
+                    className="px-6 py-2.5 bg-[#2d5a27] text-white font-semibold rounded-xl hover:bg-[#1e3e1a] disabled:opacity-50 transition text-sm"
+                >
+                    {accountForm.processing ? 'Creating…' : 'Create Member Account'}
+                </button>
+            </form>
+        )}
+    </DetailCard>
+)}
                 {/* Seminar Details (if assigned) */}
                 {registration.seminar && (
                     <DetailCard title="Assigned Seminar" icon={BookOpenCheck}>

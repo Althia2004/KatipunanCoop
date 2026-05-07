@@ -1,0 +1,735 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Loan;
+use App\Models\LoanRequest;
+use App\Models\MemberRegistration;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+
+class SuperadminController extends Controller
+{
+    public function dashboard()
+    {
+        $staff = User::whereNot('role', 'member')
+            ->select(['id', 'name', 'email', 'role', 'email_verified_at', 'created_at'])
+            ->orderBy('name')
+            ->get();
+
+        $pendingLoans = LoanRequest::where('status', LoanRequest::STATUS_PENDING)
+            ->with('requestedBy:id,name')
+            ->latest()
+            ->limit(5)
+            ->get()
+            ->map(fn ($lr) => [
+                'id'          => $lr->id,
+                'type'        => 'Loan Approval',
+                'requestedBy' => $lr->requestedBy?->name ?? 'Unknown',
+                'date'        => $lr->created_at->format('M d, Y'),
+                'priority'    => 'medium',
+            ]);
+
+        $pendingRegs = MemberRegistration::whereIn('status', [
+                MemberRegistration::STATUS_SEMINAR_ATTENDED,
+                'for_bod_approval',
+            ])
+            ->latest()
+            ->limit(5)
+            ->get()
+            ->map(fn ($mr) => [
+                'id'          => $mr->id,
+                'type'        => 'Member Registration',
+                'requestedBy' => trim("{$mr->first_name} {$mr->last_name}"),
+                'date'        => $mr->created_at->format('M d, Y'),
+                'priority'    => 'low',
+            ]);
+
+        return inertia('Superadmin/Dashboard', [
+            'stats' => [
+                'totalMembers'     => User::where('role', 'member')->count(),
+                'pendingApprovals' => LoanRequest::where('status', LoanRequest::STATUS_PENDING)->count()
+                    + MemberRegistration::whereIn('status', [
+                        MemberRegistration::STATUS_SEMINAR_ATTENDED,
+                        'for_bod_approval',
+                    ])->count(),
+                'activeStaff'      => $staff->count(),
+                'systemAlerts'     => 0,
+            ],
+            'staff'           => $staff,
+            'recentApprovals' => $pendingLoans->toBase()->concat($pendingRegs->toBase())->take(5)->values(),
+            'recentAudit' => \Spatie\Activitylog\Models\Activity::with('causer')
+                ->latest()
+                ->take(5)
+                ->get()
+                ->map(fn ($log) => [
+                    'id'          => $log->id,
+                    'action'      => $log->description,
+                    'performedBy' => $log->causer?->email ?? 'System',
+                    'target'      => $log->subject_type
+                        ? class_basename($log->subject_type) . ' #' . $log->subject_id
+                        : 'System',
+                    'datetime'    => $log->created_at->format('M d, Y h:i A'),
+                    'type'        => $this->getLogType($log->description),
+                ]),
+        ]);
+    }
+
+    public function staff()
+    {
+        return inertia('Superadmin/Staff', [
+            'staff' => User::whereNot('role', 'member')
+                ->select(['id', 'name', 'email', 'role', 'email_verified_at', 'created_at'])
+                ->orderBy('name')
+                ->get(),
+        ]);
+    }
+
+    public function storeStaff(Request $request)
+    {
+        $validated = $request->validate([
+            'name'     => ['required', 'string', 'max:255'],
+            'email'    => ['required', 'email', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8'],
+            'role'     => ['required', 'in:admin,manager,board,bookkeeper,hr,staff,superadmin'],
+        ]);
+
+        User::create([
+            'name'              => $validated['name'],
+            'email'             => $validated['email'],
+            'password'          => $validated['password'],
+            'role'              => $validated['role'],
+            'email_verified_at' => now(),
+        ]);
+
+        activity()->causedBy(auth()->user())
+            ->withProperties(['role' => $validated['role']])
+            ->log('Staff account created');
+
+        return back()->with('success', 'Staff member added successfully.');
+    }
+
+    public function updateStaff(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'name'  => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', Rule::unique('users')->ignore($user->id)],
+            'role'  => ['required', 'in:admin,manager,board,bookkeeper,hr,staff,superadmin'],
+        ]);
+
+        $user->update($validated);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($user)
+            ->withProperties(['changes' => $request->only(['name', 'email', 'role'])])
+            ->log('Staff account updated');
+
+        return back()->with('success', 'Staff member updated successfully.');
+    }
+
+    public function destroyStaff(Request $request, User $user)
+    {
+        if ($user->id === $request->user()->id) {
+            return back()->withErrors(['error' => 'You cannot delete your own account.']);
+        }
+
+        if ($user->role === 'superadmin' && User::where('role', 'superadmin')->count() <= 1) {
+            return back()->withErrors(['error' => 'Cannot delete the last superadmin account.']);
+        }
+
+        $userName = $user->name;
+        $user->delete();
+
+        activity()->causedBy(auth()->user())
+            ->withProperties(['deleted_user' => $userName])
+            ->log('Staff account deleted');
+
+        return back()->with('success', 'Staff member removed successfully.');
+    }
+
+    public function approvals()
+    {
+        $pendingLoans = LoanRequest::where('status', LoanRequest::STATUS_PENDING)
+            ->with('requestedBy:id,name')
+            ->latest()
+            ->get()
+            ->map(fn ($lr) => [
+                'id'          => $lr->id,
+                'amount'      => $lr->principal_amount,
+                'requestedBy' => $lr->requestedBy?->name ?? 'Unknown',
+                'date'        => $lr->created_at->format('M d, Y'),
+            ]);
+
+        $pendingRegs = MemberRegistration::whereIn('status', [
+                MemberRegistration::STATUS_SEMINAR_ATTENDED,
+                'for_bod_approval',
+            ])
+            ->latest()
+            ->get()
+            ->map(fn ($mr) => [
+                'id'         => $mr->id,
+                'full_name'  => trim("{$mr->first_name} {$mr->last_name}"),
+                'address'    => trim("{$mr->address_street}, {$mr->address_barangay}, {$mr->address_city}"),
+                'income'     => $mr->source_of_income,
+                'date'       => $mr->created_at->format('M d, Y'),
+                'status'     => $mr->status,
+            ]);
+
+        return inertia('Superadmin/Approvals', [
+            'pendingLoans'         => $pendingLoans->values(),
+            'pendingRegistrations' => $pendingRegs->values(),
+            'pendingDeletions'     => \App\Models\Member::where('status', \App\Models\Member::STATUS_PENDING_DELETION)
+                ->latest()
+                ->get()
+                ->map(fn ($m) => [
+                    'id'      => $m->id,
+                    'name'    => $m->name,
+                    'contact' => $m->memberRegistration?->contact_number ?? '—',
+                    'date'    => $m->updated_at->format('M d, Y'),
+                    'priority' => 'High',
+                ])->values(),
+        ]);
+    }
+
+    public function approveRegistration(MemberRegistration $memberRegistration)
+    {
+        abort_if(
+            !in_array($memberRegistration->status, [MemberRegistration::STATUS_SEMINAR_ATTENDED, 'for_bod_approval']),
+            422,
+            'Registration must have completed the seminar before approving.'
+        );
+
+        $memberRegistration->update(['status' => MemberRegistration::STATUS_APPROVED]);
+
+        // Ensure a Member record exists and set it to approved
+        \App\Models\Member::updateOrCreate(
+            ['member_registration_id' => $memberRegistration->id],
+            [
+                'name'              => trim("{$memberRegistration->first_name} {$memberRegistration->last_name}"),
+                'gender'            => $memberRegistration->gender ?? null,
+                'status'            => \App\Models\Member::STATUS_APPROVED,
+                'membership_status' => \App\Models\Member::MEMBERSHIP_GOOD,
+                'standing'          => 'active',
+                'start_date'        => now()->toDateString(),
+            ]
+        );
+
+        // Create User account only if one does not already exist
+        $email = preg_replace('/\s+/', '', $memberRegistration->contact_number) . '@kscf.local';
+        if (!User::where('email', $email)->exists()) {
+            User::create([
+                'name'              => trim("{$memberRegistration->first_name} {$memberRegistration->last_name}"),
+                'email'             => $email,
+                'password'          => 'Member@' . date('Y'),
+                'role'              => 'member',
+                'email_verified_at' => now(),
+            ]);
+        }
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($memberRegistration)
+            ->log('Member registration approved');
+
+        return back()->with('success', 'Registration approved. Member account created.');
+    }
+
+    public function rejectRegistration(Request $request, MemberRegistration $memberRegistration)
+    {
+        abort_if(
+            !in_array($memberRegistration->status, [MemberRegistration::STATUS_SEMINAR_ATTENDED, 'for_bod_approval']),
+            422,
+            'Only seminar-attended registrations can be rejected.'
+        );
+
+        $memberRegistration->update([
+            'status' => MemberRegistration::STATUS_REJECTED,
+            'notes'  => $request->input('reason'),
+        ]);
+
+        activity()->log("Member registration rejected: {$memberRegistration->first_name} {$memberRegistration->last_name}");
+
+        return back()->with('success', 'Registration rejected.');
+    }
+
+    public function approveDeletion(\App\Models\Member $member)
+    {
+        $name = $member->name;
+        $member->delete();
+
+        activity()->causedBy(auth()->user())
+            ->log('Member deletion approved — ' . $name . ' permanently removed');
+
+        return back()->with('success', 'Member ' . $name . ' deleted successfully.');
+    }
+
+    public function rejectDeletion(\App\Models\Member $member)
+    {
+        $member->update(['status' => \App\Models\Member::STATUS_APPROVED]);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log('Member deletion rejected — ' . $member->name . ' restored to approved');
+
+        return back()->with('success', 'Deletion request rejected. Member restored to active.');
+    }
+
+    public function settings()
+    {
+        return inertia('Superadmin/Settings', [
+            'settings' => [
+                'lendingRate'        => 3,
+                'caRate'             => 2,
+                'latePenalty'        => 50,
+                'managerLimit'       => 50000,
+                'bodThreshold'       => 80,
+                'migsMinScore'       => 50,
+                'dividendAllocation' => 70,
+            ],
+        ]);
+    }
+
+    public function updateSettings(Request $request)
+    {
+        $request->validate([
+            'lendingRate'        => ['required', 'numeric', 'min:0', 'max:100'],
+            'caRate'             => ['required', 'numeric', 'min:0', 'max:100'],
+            'latePenalty'        => ['required', 'numeric', 'min:0'],
+            'managerLimit'       => ['required', 'numeric', 'min:0'],
+            'bodThreshold'       => ['required', 'numeric', 'min:0', 'max:100'],
+            'migsMinScore'       => ['required', 'numeric', 'min:0'],
+            'dividendAllocation' => ['required', 'numeric', 'min:0', 'max:100'],
+        ]);
+
+        // TODO: persist to system_settings table when created
+        activity()->causedBy(auth()->user())
+            ->log('System settings updated');
+
+        return back()->with('success', 'Settings saved successfully.');
+    }
+
+    public function audit(Request $request)
+    {
+        $query = \Spatie\Activitylog\Models\Activity::with('causer')
+            ->latest();
+
+        if ($request->filled('action') && $request->action !== 'all') {
+            $query->where('description', 'like', '%' . $request->action . '%');
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('description', 'like', "%{$search}%")
+                    ->orWhereHas('causer', fn ($q) => $q->where('email', 'like', "%{$search}%")
+                        ->orWhere('name', 'like', "%{$search}%"));
+            });
+        }
+
+        $logs = $query->paginate(20)->through(function ($log) {
+            return [
+                'id'           => $log->id,
+                'action'       => $log->description,
+                'performed_by' => $log->causer?->email ?? 'System',
+                'target'       => $log->subject_type
+                    ? class_basename($log->subject_type) . ' #' . $log->subject_id
+                    : 'System',
+                'ip_address'   => request()->ip(),
+                'created_at'   => $log->created_at->format('M d, Y h:i A'),
+                'type'         => $this->getLogType($log->description),
+            ];
+        });
+
+        return inertia('Superadmin/Audit', [
+            'logs'    => $logs,
+            'filters' => $request->only(['search', 'action']),
+        ]);
+    }
+
+    private function getLogType(string $description): string
+    {
+        $lower = strtolower($description);
+        if (str_contains($lower, 'created') || str_contains($lower, 'registered') || str_contains($lower, 'approved')) return 'created';
+        if (str_contains($lower, 'updated') || str_contains($lower, 'changed')) return 'updated';
+        if (str_contains($lower, 'deleted') || str_contains($lower, 'removed')) return 'deleted';
+        return 'login';
+    }
+
+    public function annualReports()
+    {
+        return inertia('Superadmin/AnnualReports', [
+            'meetings' => \App\Models\AnnualMeeting::latest('date')->get(),
+        ]);
+    }
+
+    public function storeAnnualReport(Request $request)
+    {
+        $validated = $request->validate([
+            'topic'      => ['required', 'string', 'max:255'],
+            'host'       => ['required', 'string', 'max:255'],
+            'date'       => ['required', 'date'],
+            'time_start' => ['required', 'date_format:H:i'],
+            'time_end'   => ['nullable', 'date_format:H:i', 'after:time_start'],
+            'status'     => ['required', 'in:scheduled,completed,cancelled'],
+            'overview'   => ['nullable', 'string'],
+        ]);
+
+        \App\Models\AnnualMeeting::create($validated);
+
+        return redirect()->route('superadmin.reports.annual')
+            ->with('success', 'Annual meeting report created.');
+    }
+
+    public function downloadAnnualReport(\App\Models\AnnualMeeting $meeting)
+    {
+        $content  = "KSCFMPC Annual Meeting Report\n";
+        $content .= "========================\n\n";
+        $content .= "Topic:      {$meeting->topic}\n";
+        $content .= "Host:       {$meeting->host}\n";
+        $content .= "Date:       {$meeting->date->format('F d, Y')}\n";
+        $content .= "Time:       {$meeting->time_start}" . ($meeting->time_end ? " – {$meeting->time_end}" : '') . "\n";
+        $content .= "Status:     " . ucfirst($meeting->status) . "\n";
+        if ($meeting->overview) {
+            $content .= "\nOverview:\n{$meeting->overview}\n";
+        }
+
+        $filename = 'annual-meeting-' . $meeting->date->format('Y-m-d') . '.txt';
+
+        return response($content, 200, [
+            'Content-Type'        => 'text/plain',
+            'Content-Disposition' => "attachment; filename={$filename}",
+        ]);
+    }
+
+    public function financialReports(Request $request)
+    {
+        $year = (int) $request->input('year', now()->year);
+
+        // Total loans released (sum of principal across all loans)
+        $totalLoansReleased = \App\Models\Loan::sum('principal_amount');
+
+        // Total collections (all loan payments received)
+        $totalCollections = \App\Models\LoanPayment::sum('amount_paid');
+
+        // TODO: wire once Member model has savings_balance column
+        $totalSavings = 0;
+
+        // TODO: wire once Member model has share_capital column
+        $totalCapitalShares = 0;
+
+        // Monthly summary for selected year (only months with activity)
+        $monthlySummary = collect(range(1, 12))->map(function ($month) use ($year) {
+            $loansReleased = \App\Models\Loan::whereYear('created_at', $year)
+                ->whereMonth('created_at', $month)
+                ->sum('principal_amount');
+            $collections = \App\Models\LoanPayment::whereYear('created_at', $year)
+                ->whereMonth('created_at', $month)
+                ->sum('amount_paid');
+            return [
+                'month'          => \Carbon\Carbon::create($year, $month)->format('M Y'),
+                'loans_released' => (float) $loansReleased,
+                'collections'    => (float) $collections,
+                'net'            => (float) $collections - (float) $loansReleased,
+            ];
+        })->filter(fn ($m) => $m['loans_released'] > 0 || $m['collections'] > 0)->values();
+
+        // Loan status breakdown (from LoanRequest — has pending/approved/rejected statuses)
+        $loanStatusBreakdown = [
+            'pending'      => \App\Models\LoanRequest::where('status', 'pending')->count(),
+            'approved'     => \App\Models\LoanRequest::where('status', 'approved')->count(),
+            'rejected'     => \App\Models\LoanRequest::where('status', 'rejected')->count(),
+            'bod_approval' => \App\Models\LoanRequest::where('status', 'for_bod_approval')->count(),
+        ];
+
+        // Recent loan payments (last 10)
+        $recentPayments = \App\Models\LoanPayment::with(['loan.borrower'])
+            ->latest()
+            ->take(10)
+            ->get()
+            ->map(fn ($p) => [
+                'id'             => $p->id,
+                'member_name'    => optional(optional($p->loan)->borrower)->name ?? '—',
+                'principal_amount' => optional($p->loan)->principal_amount ?? 0,
+                'amount_paid'    => $p->amount_paid,
+                'payment_date'   => $p->payment_date,
+            ]);
+
+        // Available years for the year filter
+        $availableYears = range(now()->year, max(now()->year - 3, 2020));
+
+        return inertia('Superadmin/FinancialReports', [
+            'totalLoansReleased'  => (float) $totalLoansReleased,
+            'totalCollections'    => (float) $totalCollections,
+            'totalSavings'        => (float) $totalSavings,
+            'totalCapitalShares'  => (float) $totalCapitalShares,
+            'monthlySummary'      => $monthlySummary,
+            'loanStatusBreakdown' => $loanStatusBreakdown,
+            'recentPayments'      => $recentPayments,
+            'currentYear'         => $year,
+            'availableYears'      => $availableYears,
+        ]);
+    }
+
+    public function members()
+    {
+        // Pre-load all member users keyed by email for O(1) lookup (avoids N+1)
+        $memberUsers = User::where('role', 'member')->get()->keyBy('email');
+
+        $members = \App\Models\Member::with([
+                'memberRegistration.coMaker',
+                'memberRegistration.beneficiaries',
+            ])
+            ->whereNotIn('status', [\App\Models\Member::STATUS_PENDING, \App\Models\Member::STATUS_REJECTED])
+            ->latest()
+            ->get()
+            ->map(function ($m) use ($memberUsers) {
+                $reg  = $m->memberRegistration;
+                $contactEmail = $reg
+                    ? preg_replace('/\s+/', '', $reg->contact_number) . '@kscf.local'
+                    : null;
+                $user = $contactEmail ? $memberUsers->get($contactEmail) : null;
+
+                return [
+                    'id'               => $m->id,
+                    'name'             => $m->name,
+                    'first_name'       => $reg?->first_name ?? '',
+                    'last_name'        => $reg?->last_name ?? '',
+                    'email'            => $user?->email ?? '—',
+                    'email_verified_at' => $user?->email_verified_at,
+                    'created_at'       => $m->created_at->toISOString(),
+                    'user_id'          => $user?->id,
+                    'contact_number'   => $reg?->contact_number ?? '',
+                    'source_of_income' => $reg?->source_of_income ?? '',
+                    'phone'            => $reg?->contact_number ?? '',
+                    'address'          => $reg
+                        ? trim(implode(', ', array_filter([
+                            $reg->address_street,
+                            $reg->address_barangay,
+                            $reg->address_city,
+                        ])))
+                        : '',
+                    'member_since'     => $m->start_date?->format('M d, Y') ?? $m->created_at->format('M d, Y'),
+                    'share_capital'    => null,
+                    'status'           => $m->status,
+                    'membership_status' => $m->membership_status,
+                    'migs_score'       => null,
+                    'co_makers'        => $reg?->coMaker ? [[
+                        'id'             => $reg->coMaker->id,
+                        'first_name'     => $reg->coMaker->first_name,
+                        'last_name'      => $reg->coMaker->last_name,
+                        'contact_number' => $reg->coMaker->contact_number,
+                        'relationship'   => $reg->coMaker->relationship,
+                    ]] : [],
+                    'beneficiaries'    => $reg?->beneficiaries->map(fn ($b) => [
+                        'id'             => $b->id,
+                        'first_name'     => $b->first_name,
+                        'last_name'      => $b->last_name,
+                        'contact_number' => $b->contact_number,
+                        'relationship'   => $b->relationship,
+                    ])->toArray() ?? [],
+                ];
+            });
+
+        return inertia('Superadmin/Members', [
+            'members' => $members->values(),
+        ]);
+    }
+
+    public function updateMember(Request $request, \App\Models\Member $member)
+    {
+        $reg  = $member->memberRegistration;
+        $contactEmail = $reg
+            ? preg_replace('/\s+/', '', $reg->contact_number) . '@kscf.local'
+            : null;
+        $user = $contactEmail ? User::where('email', $contactEmail)->first() : null;
+
+        $validated = $request->validate([
+            'first_name'     => 'required|string|max:255',
+            'last_name'      => 'required|string|max:255',
+            'contact_number' => 'required|string|max:20',
+            'email'          => ['required', 'email', Rule::unique('users', 'email')->ignore($user?->id)],
+            'password'       => 'nullable|min:8',
+        ]);
+
+        // Update member's stored full name
+        $fullName = trim($validated['first_name'] . ' ' . $validated['last_name']);
+        $member->update(['name' => $fullName]);
+
+        // Update registration fields
+        if ($reg) {
+            $reg->update([
+                'first_name'     => $validated['first_name'],
+                'last_name'      => $validated['last_name'],
+                'contact_number' => $validated['contact_number'],
+            ]);
+        }
+
+        // Update linked user account
+        if ($user) {
+            $accountData = ['email' => $validated['email']];
+            if (!empty($validated['password'])) {
+                $accountData['password'] = $validated['password'];
+            }
+            $user->update($accountData);
+        }
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log('Member record updated by superadmin');
+
+        return back()->with('success', 'Member updated successfully.');
+    }
+
+    public function updateMemberAccount(Request $request, \App\Models\Member $member)
+    {
+        $reg  = $member->memberRegistration;
+        $contactEmail = $reg
+            ? preg_replace('/\s+/', '', $reg->contact_number) . '@kscf.local'
+            : null;
+        $user = $contactEmail ? User::where('email', $contactEmail)->first() : null;
+
+        $validated = $request->validate([
+            'email'    => ['required', 'email', Rule::unique('users', 'email')->ignore($user?->id)],
+            'password' => 'nullable|min:8',
+        ]);
+
+        if ($user) {
+            $updateData = ['email' => $validated['email']];
+            if (!empty($validated['password'])) {
+                $updateData['password'] = $validated['password'];
+            }
+            $user->update($updateData);
+            activity()->causedBy(auth()->user())
+                ->performedOn($member)
+                ->log('Member account credentials updated by superadmin');
+        }
+
+        return back()->with('success', 'Member account updated successfully.');
+    }
+
+    public function deleteMember(\App\Models\Member $member)
+    {
+        $name = $member->name;
+
+        // Find and delete linked user account
+        $reg = $member->memberRegistration;
+        if ($reg) {
+            $email = preg_replace('/\s+/', '', $reg->contact_number) . '@kscf.local';
+            User::where('email', $email)->delete();
+        }
+
+        $member->delete();
+
+        activity()->causedBy(auth()->user())
+            ->log('Member permanently deleted by superadmin — ' . $name);
+
+        return back()->with('success', $name . ' has been permanently deleted.');
+    }
+
+    public function loans(Request $request)
+    {
+        $query = Loan::with(['borrower', 'loanRequest'])->latest();
+
+        if ($request->filled('status') && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->whereHas('borrower', fn ($q) => $q->where('name', 'like', "%{$search}%"));
+        }
+
+        $loans = $query->paginate(15)->through(fn ($l) => [
+            'id'            => $l->id,
+            'member_name'   => $l->borrower?->name ?? 'Unknown',
+            'member_id'     => $l->member_id,
+            'amount'        => (float) $l->principal_amount,
+            'purpose'       => $l->loanRequest?->purpose ?? '—',
+            'status'        => $l->status,
+            'interest_rate' => (float) $l->interest_rate,
+            'term_months'   => $l->term_months,
+            'balance'       => (float) $l->remaining_balance,
+            'released_at'   => $l->created_at->format('M d, Y'),
+        ]);
+
+        $allLoans = Loan::all();
+        $stats = [
+            'total'          => $allLoans->count(),
+            'active'         => $allLoans->where('status', 'active')->count(),
+            'pending'        => LoanRequest::where('status', LoanRequest::STATUS_PENDING)->count(),
+            'closed'         => $allLoans->where('status', 'fully_paid')->count(),
+            'total_released' => (float) $allLoans->sum('principal_amount'),
+        ];
+
+        return inertia('Superadmin/Loans', [
+            'loans'   => $loans,
+            'stats'   => $stats,
+            'filters' => $request->only(['search', 'status']),
+        ]);
+    }
+
+    public function showLoan(Request $request, Loan $loan)
+    {
+        $loan->load(['borrower', 'loanRequest', 'amortizations', 'payments']);
+
+        return response()->json([
+            'id'            => $loan->id,
+            'member_name'   => $loan->borrower?->name ?? 'Unknown',
+            'purpose'       => $loan->loanRequest?->purpose ?? '—',
+            'amount'        => (float) $loan->principal_amount,
+            'term_months'   => $loan->term_months,
+            'interest_rate' => (float) $loan->interest_rate,
+            'total_payable' => (float) $loan->total_payable,
+            'balance'       => (float) $loan->remaining_balance,
+            'status'        => $loan->status,
+            'released_at'   => $loan->created_at->format('M d, Y'),
+            'total_paid'    => (float) $loan->payments->sum('amount_paid'),
+            'amortizations' => $loan->amortizations->map(fn ($a) => [
+                'id'            => $a->id,
+                'due_date'      => $a->due_date,
+                'amount_to_pay' => (float) $a->amount_to_pay,
+                'principal_part'=> (float) $a->principal_part,
+                'interest_part' => (float) $a->interest_part,
+                'status'        => $a->status,
+            ]),
+            'payments' => $loan->payments->map(fn ($p) => [
+                'id'               => $p->id,
+                'amount_paid'      => (float) $p->amount_paid,
+                'payment_date'     => $p->payment_date,
+                'payment_method'   => $p->payment_method,
+                'reference_number' => $p->reference_number,
+                'remarks'          => $p->remarks,
+            ]),
+        ]);
+    }
+
+    public function updateLoan(Request $request, Loan $loan)
+    {
+        $validated = $request->validate([
+            'status'        => ['required', Rule::in(['active', 'fully_paid', 'defaulted'])],
+            'interest_rate' => ['required', 'numeric', 'min:0', 'max:100'],
+            'term_months'   => ['required', 'integer', 'min:1', 'max:360'],
+        ]);
+
+        $loan->update($validated);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($loan)
+            ->log('Loan updated by superadmin — status: ' . $validated['status']);
+
+        return back()->with('success', 'Loan updated successfully.');
+    }
+
+    public function deleteLoan(Loan $loan)
+    {
+        $memberName = $loan->borrower?->name ?? 'Unknown';
+        $amount     = number_format($loan->principal_amount, 2);
+
+        $loan->delete();
+
+        activity()->causedBy(auth()->user())
+            ->log("Loan #{$loan->id} (₱{$amount}) for {$memberName} permanently deleted by superadmin");
+
+        return back()->with('success', 'Loan deleted successfully.');
+    }
+}

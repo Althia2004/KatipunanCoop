@@ -19,7 +19,7 @@ const STATUS_LABELS: Record<RegistrationStatus, string> = {
     pending:            'Pending',
     seminar_scheduled:  'Seminar Scheduled',
     seminar_attended:   'Seminar Attended',
-    for_bod_approval:   'For BOD Approval',
+    for_bod_approval:   'Awaiting Superadmin',
     approved:           'Approved',
     rejected:           'Rejected',
 };
@@ -63,13 +63,13 @@ export default function MemberRegistrationDashboard({ registrations }: Props) {
     const totalCount    = registrations.length;
     const pendingCount  = registrations.filter(r => r.status === 'pending').length;
     const approvedCount = registrations.filter(r => r.status === 'approved').length;
-    const bodCount      = registrations.filter(r => r.status === 'for_bod_approval').length;
+    const bodCount      = registrations.filter(r => r.status === 'for_bod_approval' || r.status === 'seminar_attended').length;
 
     return (
         <>
             <Head title="Member Registration" />
 
-            <div className="p-8 max-w-[90rem] mx-auto space-y-8">
+            <div className="p-8 max-w-360 mx-auto space-y-8">
 
                 {/* Header */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 pb-6">
@@ -112,7 +112,7 @@ export default function MemberRegistrationDashboard({ registrations }: Props) {
                         <div className="flex items-center gap-4">
                             <div className="p-3 bg-purple-50 rounded-lg text-purple-600"><Users /></div>
                             <div>
-                                <p className="text-sm text-zinc-500 font-medium">For BOD Approval</p>
+                                <p className="text-sm text-zinc-500 font-medium">Awaiting Approval</p>
                                 <p className="text-2xl font-bold text-zinc-900">{bodCount}</p>
                             </div>
                         </div>
