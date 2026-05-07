@@ -45,6 +45,9 @@ Route::prefix('superadmin')
         Route::delete('/members/{member}', [SuperadminController::class, 'deleteMember'])->name('superadmin.members.delete');
         Route::put('/members/{member}/account', [SuperadminController::class, 'updateMemberAccount'])->name('superadmin.members.account.update');
         Route::get('/loans', [SuperadminController::class, 'loans'])->name('superadmin.loans');
+        Route::get('/loans/{loan}', [SuperadminController::class, 'showLoan'])->name('superadmin.loans.show');
+        Route::put('/loans/{loan}', [SuperadminController::class, 'updateLoan'])->name('superadmin.loans.update');
+        Route::delete('/loans/{loan}', [SuperadminController::class, 'deleteLoan'])->name('superadmin.loans.delete');
         Route::inertia('/pending-approvals', 'Superadmin/PendingApprovals/PendingApprovalsPanel')
             ->name('superadmin.pending-approvals');
     });

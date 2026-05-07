@@ -34,10 +34,12 @@ interface ApprovalItem {
 }
 
 interface AuditItem {
+    id: number;
     action: string;
     performedBy: string;
     target: string;
     datetime: string;
+    type: 'created' | 'updated' | 'deleted' | 'login';
 }
 
 interface Props {
@@ -360,7 +362,13 @@ export default function SuperadminDashboard({ stats, staff, recentApprovals, rec
                 {/* Audit Log */}
                 <Card className="border border-zinc-200 shadow-sm">
                     <CardHeader className="pb-2">
-                        <h2 className="text-base font-semibold text-zinc-900">Recent Audit Log</h2>
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-base font-semibold text-zinc-900">Recent Audit Log</h2>
+                            <Link href="/superadmin/audit"
+                                className="text-xs text-[#2d5a27] font-medium hover:underline">
+                                View all
+                            </Link>
+                        </div>
                     </CardHeader>
                     <CardContent className="pt-0">
                         {recentAudit.length === 0 ? (
@@ -378,8 +386,8 @@ export default function SuperadminDashboard({ stats, staff, recentApprovals, rec
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {recentAudit.map((log, i) => (
-                                        <tr key={i} className="border-b border-zinc-100 last:border-0">
+                                    {recentAudit.map((log) => (
+                                        <tr key={log.id} className="border-b border-zinc-100 last:border-0">
                                             <td className="py-2 text-zinc-800">{log.action}</td>
                                             <td className="py-2 text-zinc-500">{log.performedBy}</td>
                                             <td className="py-2 text-zinc-500">{log.target}</td>

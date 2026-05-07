@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Loan;
 use App\Models\LoanRequest;
 use App\Models\MemberRegistration;
 use App\Models\User;
@@ -30,7 +31,10 @@ class SuperadminController extends Controller
                 'priority'    => 'medium',
             ]);
 
-        $pendingRegs = MemberRegistration::where('status', MemberRegistration::STATUS_PENDING)
+        $pendingRegs = MemberRegistration::whereIn('status', [
+                MemberRegistration::STATUS_SEMINAR_ATTENDED,
+                'for_bod_approval',
+            ])
             ->latest()
             ->limit(5)
             ->get()
@@ -46,13 +50,29 @@ class SuperadminController extends Controller
             'stats' => [
                 'totalMembers'     => User::where('role', 'member')->count(),
                 'pendingApprovals' => LoanRequest::where('status', LoanRequest::STATUS_PENDING)->count()
-                    + MemberRegistration::where('status', MemberRegistration::STATUS_PENDING)->count(),
+                    + MemberRegistration::whereIn('status', [
+                        MemberRegistration::STATUS_SEMINAR_ATTENDED,
+                        'for_bod_approval',
+                    ])->count(),
                 'activeStaff'      => $staff->count(),
                 'systemAlerts'     => 0,
             ],
             'staff'           => $staff,
             'recentApprovals' => $pendingLoans->toBase()->concat($pendingRegs->toBase())->take(5)->values(),
-            'recentAudit'     => [],
+            'recentAudit' => \Spatie\Activitylog\Models\Activity::with('causer')
+                ->latest()
+                ->take(5)
+                ->get()
+                ->map(fn ($log) => [
+                    'id'          => $log->id,
+                    'action'      => $log->description,
+                    'performedBy' => $log->causer?->email ?? 'System',
+                    'target'      => $log->subject_type
+                        ? class_basename($log->subject_type) . ' #' . $log->subject_id
+                        : 'System',
+                    'datetime'    => $log->created_at->format('M d, Y h:i A'),
+                    'type'        => $this->getLogType($log->description),
+                ]),
         ]);
     }
 
@@ -606,8 +626,110 @@ class SuperadminController extends Controller
         return back()->with('success', $name . ' has been permanently deleted.');
     }
 
-    public function loans()
+    public function loans(Request $request)
     {
-        return inertia('Superadmin/Loans', []);
+        $query = Loan::with(['borrower', 'loanRequest'])->latest();
+
+        if ($request->filled('status') && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->whereHas('borrower', fn ($q) => $q->where('name', 'like', "%{$search}%"));
+        }
+
+        $loans = $query->paginate(15)->through(fn ($l) => [
+            'id'            => $l->id,
+            'member_name'   => $l->borrower?->name ?? 'Unknown',
+            'member_id'     => $l->member_id,
+            'amount'        => (float) $l->principal_amount,
+            'purpose'       => $l->loanRequest?->purpose ?? '—',
+            'status'        => $l->status,
+            'interest_rate' => (float) $l->interest_rate,
+            'term_months'   => $l->term_months,
+            'balance'       => (float) $l->remaining_balance,
+            'released_at'   => $l->created_at->format('M d, Y'),
+        ]);
+
+        $allLoans = Loan::all();
+        $stats = [
+            'total'          => $allLoans->count(),
+            'active'         => $allLoans->where('status', 'active')->count(),
+            'pending'        => LoanRequest::where('status', LoanRequest::STATUS_PENDING)->count(),
+            'closed'         => $allLoans->where('status', 'fully_paid')->count(),
+            'total_released' => (float) $allLoans->sum('principal_amount'),
+        ];
+
+        return inertia('Superadmin/Loans', [
+            'loans'   => $loans,
+            'stats'   => $stats,
+            'filters' => $request->only(['search', 'status']),
+        ]);
+    }
+
+    public function showLoan(Request $request, Loan $loan)
+    {
+        $loan->load(['borrower', 'loanRequest', 'amortizations', 'payments']);
+
+        return response()->json([
+            'id'            => $loan->id,
+            'member_name'   => $loan->borrower?->name ?? 'Unknown',
+            'purpose'       => $loan->loanRequest?->purpose ?? '—',
+            'amount'        => (float) $loan->principal_amount,
+            'term_months'   => $loan->term_months,
+            'interest_rate' => (float) $loan->interest_rate,
+            'total_payable' => (float) $loan->total_payable,
+            'balance'       => (float) $loan->remaining_balance,
+            'status'        => $loan->status,
+            'released_at'   => $loan->created_at->format('M d, Y'),
+            'total_paid'    => (float) $loan->payments->sum('amount_paid'),
+            'amortizations' => $loan->amortizations->map(fn ($a) => [
+                'id'            => $a->id,
+                'due_date'      => $a->due_date,
+                'amount_to_pay' => (float) $a->amount_to_pay,
+                'principal_part'=> (float) $a->principal_part,
+                'interest_part' => (float) $a->interest_part,
+                'status'        => $a->status,
+            ]),
+            'payments' => $loan->payments->map(fn ($p) => [
+                'id'               => $p->id,
+                'amount_paid'      => (float) $p->amount_paid,
+                'payment_date'     => $p->payment_date,
+                'payment_method'   => $p->payment_method,
+                'reference_number' => $p->reference_number,
+                'remarks'          => $p->remarks,
+            ]),
+        ]);
+    }
+
+    public function updateLoan(Request $request, Loan $loan)
+    {
+        $validated = $request->validate([
+            'status'        => ['required', Rule::in(['active', 'fully_paid', 'defaulted'])],
+            'interest_rate' => ['required', 'numeric', 'min:0', 'max:100'],
+            'term_months'   => ['required', 'integer', 'min:1', 'max:360'],
+        ]);
+
+        $loan->update($validated);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($loan)
+            ->log('Loan updated by superadmin — status: ' . $validated['status']);
+
+        return back()->with('success', 'Loan updated successfully.');
+    }
+
+    public function deleteLoan(Loan $loan)
+    {
+        $memberName = $loan->borrower?->name ?? 'Unknown';
+        $amount     = number_format($loan->principal_amount, 2);
+
+        $loan->delete();
+
+        activity()->causedBy(auth()->user())
+            ->log("Loan #{$loan->id} (₱{$amount}) for {$memberName} permanently deleted by superadmin");
+
+        return back()->with('success', 'Loan deleted successfully.');
     }
 }
