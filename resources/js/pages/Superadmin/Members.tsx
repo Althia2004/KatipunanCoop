@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Head, useForm, router, usePage } from '@inertiajs/react';
-import { Search, Eye, Pencil, Trash2, CheckCircle2 } from 'lucide-react';
+import { Search, Eye, Pencil, Trash2, CheckCircle2, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,21 +36,24 @@ interface Beneficiary {
 interface MemberUser {
     id: number;
     name: string;
-    email: string;
-    email_verified_at: string | null;
-    created_at: string;
-    migs_score?: number | null;
-    phone?: string | null;
-    address?: string | null;
     first_name: string;
     last_name: string;
+    email: string;
+    user_id: number | null;
     contact_number: string;
     source_of_income?: string;
-    user_id: number | null;
+    gender: string;
+    date_of_birth: string;
+    address: string;
     member_since: string;
-    share_capital: number | null;
+    share_capital: number;
+    savings_balance: number;
+    migs_score: number;
     status: string;
     membership_status?: string;
+    standing?: string;
+    account_status: 'verified' | 'unverified' | 'no_account';
+    classification: 'migs' | 'non_migs';
     co_makers: CoMaker[];
     beneficiaries: Beneficiary[];
 }
@@ -82,11 +85,12 @@ export default function Members({ members }: Props) {
     const filtered = members.filter((m) => {
         const matchSearch =
             m.name.toLowerCase().includes(search.toLowerCase()) ||
-            m.email.toLowerCase().includes(search.toLowerCase());
+            m.email.toLowerCase().includes(search.toLowerCase()) ||
+            m.contact_number.toLowerCase().includes(search.toLowerCase());
         const matchStatus =
             statusFilter === 'all' ||
-            (statusFilter === 'active' && !!m.email_verified_at) ||
-            (statusFilter === 'unverified' && !m.email_verified_at);
+            (statusFilter === 'active' && (m.status === 'active' || m.status === 'approved')) ||
+            (statusFilter === 'unverified' && m.account_status !== 'verified');
         return matchSearch && matchStatus;
     });
 
@@ -240,10 +244,24 @@ export default function Members({ members }: Props) {
                     <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-1">
                         Cooperative
                     </p>
-                    <h1 className="text-2xl font-bold text-[#2d5a27]">All Members</h1>
-                    <p className="text-sm text-zinc-400 mt-0.5">
-                        View and manage all registered cooperative members.
-                    </p>
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                            <h1 className="text-2xl font-bold text-[#2d5a27]">All Members</h1>
+                            <p className="text-sm text-zinc-400 mt-0.5">
+                                View and manage all registered cooperative members.
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => {
+                                if (confirm('Recalculate MIGS scores for all members? This may take a moment.')) {
+                                    router.post('/superadmin/members/recalculate-all-migs');
+                                }
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 border border-[#2d5a27] text-[#2d5a27] text-sm font-semibold rounded-xl hover:bg-[#2d5a27]/5 transition"
+                        >
+                            <RefreshCw className="w-4 h-4" /> Recalculate All MIGS
+                        </button>
+                    </div>
                 </div>
 
                 {/* Flash */}
@@ -305,19 +323,34 @@ export default function Members({ members }: Props) {
                                     {filtered.map((m) => (
                                         <tr key={m.id} className="hover:bg-zinc-50 transition">
                                             <td className="px-4 py-3 font-medium text-zinc-800">{m.name}</td>
-                                            <td className="px-4 py-3 text-zinc-500">{m.email}</td>
-                                            <td className="px-4 py-3 text-zinc-400 text-xs">
-                                                {new Date(m.created_at).toLocaleDateString('en-PH', {
-                                                    year: 'numeric', month: 'short', day: 'numeric',
-                                                })}
+                                            <td className="px-4 py-3 text-sm">
+                                                {m.email && m.email !== '—' && !m.email.includes('@kscf.local') ? (
+                                                    <span className="text-zinc-700 text-xs">{m.email}</span>
+                                                ) : (
+                                                    <span className="text-zinc-300 text-xs italic">No email assigned</span>
+                                                )}
                                             </td>
                                             <td className="px-4 py-3 text-zinc-400 text-xs">
-                                                {/* TODO: wire to real share capital */}
-                                                —
+                                                {m.member_since}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm">
+                                                {m.share_capital > 0 ? (
+                                                    <span className="font-semibold text-[#2d5a27]">
+                                                        ₱{m.share_capital.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-zinc-300 text-xs">₱0.00</span>
+                                                )}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${m.email_verified_at ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'}`}>
-                                                    {m.email_verified_at ? 'Active' : 'Unverified'}
+                                                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${
+                                                    m.status === 'approved' || m.status === 'active'
+                                                        ? 'bg-[#2d5a27]/10 text-[#2d5a27]'
+                                                        : m.status === 'suspended' || m.status === 'pending_deletion'
+                                                        ? 'bg-red-100 text-red-700'
+                                                        : 'bg-[#c8920a]/10 text-[#c8920a]'
+                                                }`}>
+                                                    {m.status}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3 text-right">
@@ -370,11 +403,6 @@ function MemberViewSheet({
 }) {
     if (!member) return null;
 
-    const isActive = !!member.email_verified_at;
-    const memberSince = new Date(member.created_at).toLocaleDateString('en-PH', {
-        year: 'numeric', month: 'long', day: 'numeric',
-    });
-
     return (
         <Sheet open={!!member} onOpenChange={(open) => { if (!open) onClose(); }}>
             <SheetContent side="right" className="w-105 overflow-y-auto p-0 border-l border-zinc-200 shadow-xl" overlayClassName="bg-black/30">
@@ -390,11 +418,32 @@ function MemberViewSheet({
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-base font-bold text-zinc-900">{member.name}</span>
-                                <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${isActive ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'}`}>
-                                    {isActive ? 'Active' : 'Unverified'}
+                                {/* Member status badge */}
+                                <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${
+                                    member.status === 'approved' || member.status === 'active'
+                                        ? 'bg-[#2d5a27]/10 text-[#2d5a27]'
+                                        : member.status === 'suspended'
+                                        ? 'bg-red-100 text-red-700'
+                                        : 'bg-[#c8920a]/10 text-[#c8920a]'
+                                }`}>
+                                    {member.status}
                                 </span>
                             </div>
-                            <p className="text-xs text-zinc-400 truncate mt-0.5">{member.email}</p>
+                            {/* Only show email + verification badge if member has a real email */}
+                            {member.email && member.email !== '—' && !member.email.includes('@kscf.local') ? (
+                                <div className="flex items-center gap-2 mt-0.5">
+                                    <p className="text-xs text-zinc-400 truncate">{member.email}</p>
+                                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                                        member.account_status === 'verified'
+                                            ? 'bg-[#2d5a27]/10 text-[#2d5a27]'
+                                            : 'bg-zinc-100 text-zinc-400'
+                                    }`}>
+                                        {member.account_status}
+                                    </span>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-zinc-300 italic mt-0.5">No email assigned yet</p>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -405,14 +454,18 @@ function MemberViewSheet({
                     {/* Basic Info */}
                     <div>
                         <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-3">Basic Information</p>
-                        <DetailRow label="Phone">{member.phone ?? 'Not on file'}</DetailRow>
-                        <DetailRow label="Address">{member.address ?? 'Not on file'}</DetailRow>
-                        <DetailRow label="Member Since">{memberSince}</DetailRow>
-                        <DetailRow label="Status">
+                        <DetailRow label="Phone">{member.contact_number}</DetailRow>
+                        <DetailRow label="Gender">{member.gender}</DetailRow>
+                        <DetailRow label="Birthday">{member.date_of_birth}</DetailRow>
+                        <DetailRow label="Address">{member.address || '—'}</DetailRow>
+                        <DetailRow label="Member Since">{member.member_since}</DetailRow>
+                        <DetailRow label="Standing">
                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                member.email_verified_at ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'
+                                member.standing === 'active'
+                                    ? 'bg-[#2d5a27]/10 text-[#2d5a27]'
+                                    : 'bg-zinc-100 text-zinc-500'
                             }`}>
-                                {member.email_verified_at ? 'Active' : 'Inactive'}
+                                {member.standing ?? '—'}
                             </span>
                         </DetailRow>
                     </div>
@@ -420,25 +473,40 @@ function MemberViewSheet({
                     {/* Financial Overview */}
                     <div>
                         <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-3">Financial Overview</p>
-                        {/* TODO: wire share capital, savings balance from members/memberships table */}
                         <DetailRow label="Share Capital">
-                            <span className="text-zinc-400 text-sm italic">Not yet linked</span>
+                            {member.share_capital > 0
+                                ? `₱${member.share_capital.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                                : <span className="text-zinc-400 italic text-sm">₱0.00</span>}
                         </DetailRow>
                         <DetailRow label="Savings Balance">
-                            <span className="text-zinc-400 text-sm italic">Not yet linked</span>
+                            {member.savings_balance > 0
+                                ? `₱${member.savings_balance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                                : <span className="text-zinc-400 italic text-sm">₱0.00</span>}
                         </DetailRow>
                         <div className="py-2.5 border-b border-zinc-50">
                             <div className="flex justify-between items-center mb-1.5">
                                 <span className="text-sm text-zinc-500">MIGS Score</span>
-                                <span className="text-sm font-semibold text-zinc-700">{member.migs_score ?? 0}/100</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-semibold text-zinc-700">{member.migs_score}/100</span>
+                                    <button
+                                        onClick={() => router.post(`/superadmin/members/${member.id}/recalculate-migs`)}
+                                        className="text-[10px] text-[#2d5a27] hover:underline flex items-center gap-0.5"
+                                        title="Recalculate MIGS score"
+                                    >
+                                        <RefreshCw className="w-3 h-3" />
+                                    </button>
+                                </div>
                             </div>
                             <div className="h-2 bg-zinc-200 rounded-full overflow-hidden">
-                                <div className="h-full bg-[#2d5a27] rounded-full transition-all" style={{ width: `${member.migs_score ?? 0}%` }} />
+                                <div
+                                    className="h-full bg-[#2d5a27] rounded-full transition-all"
+                                    style={{ width: `${Math.min(member.migs_score, 100)}%` }}
+                                />
                             </div>
                         </div>
                         <DetailRow label="Classification">
-                            {(member.migs_score ?? 0) >= 50 ? (
-                                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">
+                            {member.classification === 'migs' ? (
+                                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#2d5a27]/10 text-[#2d5a27]">
                                     ✓ MIGS
                                 </span>
                             ) : (
@@ -449,22 +517,44 @@ function MemberViewSheet({
                         </DetailRow>
                     </div>
 
-                    {/* Loan History */}
-                    <div>
-                        <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-3">Loan History</p>
-                        {/* TODO: wire to Loan model */}
-                        <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-6 text-center text-sm text-zinc-400">
-                            No loan records found.
+                    {/* Co-Makers */}
+                    {member.co_makers.length > 0 && (
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-3">Co-Maker(s)</p>
+                            {member.co_makers.map((c) => (
+                                <div key={c.id} className="py-2.5 border-b border-zinc-50 last:border-0">
+                                    <div className="flex justify-between items-start">
+                                        <span className="text-sm font-medium text-zinc-800">{c.first_name} {c.last_name}</span>
+                                        <span className="text-xs text-zinc-400">{c.relationship}</span>
+                                    </div>
+                                    {c.contact_number && c.contact_number !== '—' && (
+                                        <p className="text-xs text-zinc-400 mt-0.5">{c.contact_number}</p>
+                                    )}
+                                </div>
+                            ))}
                         </div>
-                    </div>
+                    )}
 
                     {/* Beneficiaries */}
                     <div>
                         <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-3">Beneficiaries</p>
-                        {/* TODO: wire to Beneficiary model */}
-                        <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-6 text-center text-sm text-zinc-400">
-                            No beneficiaries on file.
-                        </div>
+                        {member.beneficiaries.length === 0 ? (
+                            <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-6 text-center text-sm text-zinc-400">
+                                No beneficiaries on file.
+                            </div>
+                        ) : (
+                            member.beneficiaries.map((b) => (
+                                <div key={b.id} className="py-2.5 border-b border-zinc-50 last:border-0">
+                                    <div className="flex justify-between items-start">
+                                        <span className="text-sm font-medium text-zinc-800">{b.first_name} {b.last_name}</span>
+                                        <span className="text-xs text-zinc-400">{b.relationship}</span>
+                                    </div>
+                                    {b.contact_number && b.contact_number !== '—' && (
+                                        <p className="text-xs text-zinc-400 mt-0.5">{b.contact_number}</p>
+                                    )}
+                                </div>
+                            ))
+                        )}
                     </div>
 
                 </div>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Loan;
 use App\Models\LoanRequest;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -12,24 +13,42 @@ class LoanManagementController extends Controller
 {
     public function index(): Response
     {
-        $loanRequests = LoanRequest::with('requestedBy')->get()->map(function (LoanRequest $loanRequest) {
+        $loanRequests = LoanRequest::with(['requestedBy', 'reviewer'])->latest()->get()->map(function (LoanRequest $loanRequest) {
             return [
-                'id' => $loanRequest->id,
-                'amount' => $loanRequest->amount,
-                'purpose' => $loanRequest->purpose,
-                'status' => $loanRequest->status,
-                'term_months' => $loanRequest->term_months,
-                'interest_rate' => $loanRequest->interest_rate, // Now being passed to React
-                'requested_at' => $loanRequest->requested_at?->toDateString(),
-                'requested_by' => [
-                    'id' => $loanRequest->requestedBy?->id,
-                    'name' => $loanRequest->requestedBy?->name,
+                'id'               => $loanRequest->id,
+                'amount'           => $loanRequest->amount,
+                'purpose'          => $loanRequest->purpose,
+                'status'           => $loanRequest->status,
+                'term_months'      => $loanRequest->term_months,
+                'interest_rate'    => $loanRequest->interest_rate,
+                'rejection_reason' => $loanRequest->rejection_reason,
+                'escalation_notes' => $loanRequest->escalation_notes,
+                'reviewed_by'      => $loanRequest->reviewer?->name,
+                'reviewed_at'      => $loanRequest->reviewed_at
+                    ? \Carbon\Carbon::parse($loanRequest->reviewed_at)->format('M d, Y')
+                    : null,
+                'requested_at'     => $loanRequest->requested_at?->toDateString(),
+                'requested_by'     => [
+                    'id'    => $loanRequest->requestedBy?->id,
+                    'name'  => $loanRequest->requestedBy?->name,
                     'email' => $loanRequest->requestedBy?->email,
                 ],
             ];
         });
 
-        return Inertia::render('Loan/Management', ['loanRequestsFromDb' => $loanRequests]);
+        $members = \App\Models\Member::with('memberRegistration')
+            ->whereIn('status', ['approved', 'active'])
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($m) => [
+                'id'   => $m->id,
+                'name' => $m->name,
+            ]);
+
+        return Inertia::render('Loan/Management', [
+            'loanRequestsFromDb' => $loanRequests,
+            'members'            => $members,
+        ]);
     }
 
     public function store(Request $request)
