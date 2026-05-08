@@ -113,7 +113,13 @@ Route::prefix('member')
 
 // ── Coming-Soon role-based dashboard placeholders ──
 Route::middleware(['auth'])->group(function () {
-    Route::inertia('/admin/dashboard',      'ComingSoon', ['page' => 'Admin Dashboard'])->name('admin.dashboard');
+    Route::get('/admin/dashboard', function () {
+        $user = auth()->user();
+        if (!$user) return redirect('/login');
+        $team = $user->currentTeam ?? $user->personalTeam();
+        if ($team) return redirect('/' . $team->slug . '/dashboard');
+        return redirect('/login');
+    })->name('admin.dashboard');
     Route::inertia('/manager/dashboard',    'ComingSoon', ['page' => 'Manager Dashboard'])->name('manager.dashboard');
     Route::inertia('/board/dashboard',      'ComingSoon', ['page' => 'Board of Directors Dashboard'])->name('board.dashboard');
     Route::inertia('/bookkeeper/dashboard', 'ComingSoon', ['page' => 'Bookkeeper Dashboard'])->name('bookkeeper.dashboard');

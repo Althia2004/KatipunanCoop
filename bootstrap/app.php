@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'superadmin' => \App\Http\Middleware\SuperadminMiddleware::class,
             'member'     => \App\Http\Middleware\EnsureMemberRole::class,
+            'guest'      => \App\Http\Middleware\RedirectIfAuthenticated::class,
         ]);
 
         $middleware->web(append: [
@@ -27,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
             SetTeamUrlDefaults::class,
+
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
