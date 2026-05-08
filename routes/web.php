@@ -2,22 +2,37 @@
 
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LoanManagementController;
+use App\Http\Controllers\LoanRequestController;
 use App\Http\Controllers\SeminarController;
 use App\Http\Controllers\AnnualReportsController;
 use App\Http\Controllers\BeneficiaryController;
 use App\Http\Controllers\MemberRegistrationController;
 use App\Http\Controllers\MemberController;
 use App\Http\Controllers\MemberAuthController;
+use App\Http\Controllers\MemberPortalController;
 use App\Http\Controllers\SuperadminController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
-Route::inertia('/', 'welcome', [
-    'canRegister' => Features::enabled(Features::registration()),
-    'canResetPassword' => Features::enabled(Features::resetPasswords()),
-])->name('home');
+Route::get('/', function () {
+    return inertia('welcome', [
+        'canRegister'      => Features::enabled(Features::registration()),
+        'canResetPassword' => Features::enabled(Features::resetPasswords()),
+        'announcements'    => \App\Models\Announcement::where('status', 'published')
+            ->latest('announcement_date')
+            ->take(3)
+            ->get()
+            ->map(fn ($a) => [
+                'id'       => $a->id,
+                'date'     => $a->announcement_date->format('F d, Y'),
+                'title'    => $a->title,
+                'desc'     => $a->content,
+                'category' => $a->category,
+            ]),
+    ]);
+})->name('home');
 
 // ── Superadmin ──
 Route::prefix('superadmin')
@@ -44,22 +59,60 @@ Route::prefix('superadmin')
         Route::put('/members/{member}', [SuperadminController::class, 'updateMember'])->name('superadmin.members.update');
         Route::delete('/members/{member}', [SuperadminController::class, 'deleteMember'])->name('superadmin.members.delete');
         Route::put('/members/{member}/account', [SuperadminController::class, 'updateMemberAccount'])->name('superadmin.members.account.update');
+        Route::post('/members/{member}/recalculate-migs', [SuperadminController::class, 'recalculateMigs'])->name('superadmin.members.recalculate-migs');
+        Route::post('/members/recalculate-all-migs', [SuperadminController::class, 'recalculateAllMigs'])->name('superadmin.members.recalculate-all-migs');
         Route::get('/loans', [SuperadminController::class, 'loans'])->name('superadmin.loans');
         Route::get('/loans/{loan}', [SuperadminController::class, 'showLoan'])->name('superadmin.loans.show');
         Route::put('/loans/{loan}', [SuperadminController::class, 'updateLoan'])->name('superadmin.loans.update');
         Route::delete('/loans/{loan}', [SuperadminController::class, 'deleteLoan'])->name('superadmin.loans.delete');
+
+        // BOD Loan Request Approval
+        Route::get('/loan-requests', [SuperadminController::class, 'loanRequests'])->name('superadmin.loan-requests');
+        Route::post('/loan-requests/{loanRequest}/approve', [SuperadminController::class, 'approveLoanRequest'])->name('superadmin.loan-requests.approve');
+        Route::post('/loan-requests/{loanRequest}/reject',  [SuperadminController::class, 'rejectLoanRequest'])->name('superadmin.loan-requests.reject');
         Route::inertia('/pending-approvals', 'Superadmin/PendingApprovals/PendingApprovalsPanel')
             ->name('superadmin.pending-approvals');
+        Route::get('/announcements', [SuperadminController::class, 'announcements'])->name('superadmin.announcements');
+        Route::post('/announcements', [SuperadminController::class, 'storeAnnouncement'])->name('superadmin.announcements.store');
+        Route::put('/announcements/{announcement}', [SuperadminController::class, 'updateAnnouncement'])->name('superadmin.announcements.update');
+        Route::delete('/announcements/{announcement}', [SuperadminController::class, 'deleteAnnouncement'])->name('superadmin.announcements.delete');
+        Route::patch('/announcements/{announcement}/toggle', [SuperadminController::class, 'toggleAnnouncement'])->name('superadmin.announcements.toggle');
+
+        // Copra Sales
+        Route::get('/copra-sales', [SuperadminController::class, 'coproSales'])->name('superadmin.copra-sales');
+        Route::post('/copra-sales/{member}', [SuperadminController::class, 'storeCoproSale'])->name('superadmin.copra-sales.store');
+        Route::delete('/copra-sales/{copraSale}', [SuperadminController::class, 'deleteCoproSale'])->name('superadmin.copra-sales.delete');
+
+        // Savings & Capital
+        Route::get('/savings', [SuperadminController::class, 'savingsOverview'])->name('superadmin.savings');
+        Route::post('/savings/{member}/deposit', [SuperadminController::class, 'savingsDeposit'])->name('superadmin.savings.deposit');
+        Route::post('/savings/{member}/withdraw', [SuperadminController::class, 'savingsWithdraw'])->name('superadmin.savings.withdraw');
+        Route::post('/savings/{member}/capital-adjust', [SuperadminController::class, 'capitalAdjust'])->name('superadmin.savings.capital-adjust');
+        Route::get('/savings/{member}/history', [SuperadminController::class, 'savingsHistory'])->name('superadmin.savings.history');
     });
 
-// ── Member Portal (guest-accessible) ──
+// ── Member Auth (guest) ──
 Route::get('/member/login', fn () => inertia('member/login'))->name('member.login');
 Route::post('/member/login', [MemberAuthController::class, 'login'])->name('member.login.post');
 Route::post('/member/logout', [MemberAuthController::class, 'logout'])->name('member.logout');
 
+// ── Member Portal (protected) ──
+Route::prefix('member')
+    ->middleware(['auth', 'member'])
+    ->group(function () {
+        Route::get('/dashboard',      [MemberPortalController::class, 'dashboard'])->name('member.dashboard');
+        Route::get('/loans',          [MemberPortalController::class, 'loans'])->name('member.loans');
+        Route::get('/savings',        [MemberPortalController::class, 'savings'])->name('member.savings');
+        Route::get('/profile',        [MemberPortalController::class, 'profile'])->name('member.profile');
+        Route::get('/announcements',  [MemberPortalController::class, 'announcements'])->name('member.announcements');
+        Route::get('/dividends',      [MemberPortalController::class, 'dividends'])->name('member.dividends');
+        Route::get('/settings',       [MemberPortalController::class, 'settings'])->name('member.settings');
+        Route::put('/settings/password', [MemberPortalController::class, 'updatePassword'])->name('member.settings.password');
+        Route::put('/settings/contact',  [MemberPortalController::class, 'updateContact'])->name('member.settings.contact');
+    });
+
 // ── Coming-Soon role-based dashboard placeholders ──
 Route::middleware(['auth'])->group(function () {
-    Route::get('/member/dashboard', [MemberAuthController::class, 'dashboard'])->name('member.dashboard');
     Route::inertia('/admin/dashboard',      'ComingSoon', ['page' => 'Admin Dashboard'])->name('admin.dashboard');
     Route::inertia('/manager/dashboard',    'ComingSoon', ['page' => 'Manager Dashboard'])->name('manager.dashboard');
     Route::inertia('/board/dashboard',      'ComingSoon', ['page' => 'Board of Directors Dashboard'])->name('board.dashboard');
@@ -99,6 +152,12 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/loan/management', [LoanManagementController::class, 'index'])
         ->name('loan.management');
+
+    // Loan Request Actions (Admin)
+    Route::post('/loan/loan-requests/{loanRequest}/approve',  [LoanRequestController::class, 'approve'])->name('loan-requests.approve');
+    Route::post('/loan/loan-requests/{loanRequest}/reject',   [LoanRequestController::class, 'reject'])->name('loan-requests.reject');
+    Route::post('/loan/loan-requests/{loanRequest}/escalate', [LoanRequestController::class, 'escalate'])->name('loan-requests.escalate');
+    Route::post('/loan/loan-requests/store',                  [LoanRequestController::class, 'store'])->name('loan-requests.store');
 
     Route::patch('/loan/request/{loanRequest}/approve', [LoanManagementController::class, 'approve'])
         ->name('loan.request.approve');
@@ -145,14 +204,36 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/user/member-management/{member}/request-deletion', [MemberController::class, 'requestDeletion'])
         ->name('user.member-management.request-deletion');
 
-    Route::inertia('/user/amortization', 'User/Amortization')
+    Route::get('/user/amortization', [MemberController::class, 'amortization'])
         ->name('user.amortization');
+    Route::get('/user/amortization/download', [MemberController::class, 'downloadAmortization'])
+        ->name('user.amortization.download');
 
-    Route::inertia('/user/savings-interest', 'User/SavingsInterest')
+    Route::get('/user/savings-interest', [MemberController::class, 'savingsInterest'])
         ->name('user.savings-interest');
+    Route::get('/user/savings-interest/download', [MemberController::class, 'downloadSavingsInterest'])
+        ->name('user.savings-interest.download');
 
-    Route::inertia('/user/dividend-reports', 'User/DividendReports')
+    Route::get('/user/dividend-reports', [MemberController::class, 'dividendReports'])
         ->name('user.dividend-reports');
+    Route::get('/user/dividend-reports/download', [MemberController::class, 'downloadDividendReports'])
+        ->name('user.dividend-reports.download');
+
+    Route::get('/user/patronage-reports', [MemberController::class, 'patronageReports'])
+        ->name('user.patronage-reports');
+    Route::post('/user/patronage-reports/request-release', [MemberController::class, 'requestPatronageRelease'])
+        ->name('user.patronage-reports.request-release');
+    Route::get('/user/patronage-reports/download', [MemberController::class, 'downloadPatronage'])
+        ->name('user.patronage-reports.download');
+
+    Route::get('/user/payments', [MemberController::class, 'payments'])
+        ->name('user.payments');
+    Route::post('/user/payments', [MemberController::class, 'recordPayment'])
+        ->name('user.payments.store');
+    Route::put('/user/payments/{payment}', [MemberController::class, 'updatePayment'])
+        ->name('user.payments.update');
+    Route::get('/user/payments/{payment}/receipt', [MemberController::class, 'downloadReceipt'])
+        ->name('user.payments.receipt');
 });
 
 // --- API Routes: Member Management ---

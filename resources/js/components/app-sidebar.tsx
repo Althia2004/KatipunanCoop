@@ -4,10 +4,12 @@ import {
     Banknote,
     BookOpen,
     BriefcaseBusiness,
+    CreditCard,
     FileText,
     FolderGit2,
     LayoutGrid,
     Scale,
+    TrendingUp,
     UserCircle,
     Users,
 } from 'lucide-react';
@@ -102,6 +104,16 @@ export function AppSidebar() {
             title: 'Dividend Reports',
             href: '/user/dividend-reports',
             icon: Banknote,
+        },
+        {
+            title: 'Patronage Reports',
+            href: '/user/patronage-reports',
+            icon: TrendingUp,
+        },
+        {
+            title: 'Payment Dashboard',
+            href: '/user/payments',
+            icon: CreditCard,
         },
     ];
 

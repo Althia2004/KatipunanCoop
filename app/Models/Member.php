@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Member extends Model
 {
@@ -24,6 +25,7 @@ class Member extends Model
     const MEMBERSHIP_NON_COMPLIANT = 'non-compliant';
 
     protected $fillable = [
+        'user_id',
         'member_registration_id',
         'name',
         'gender',
@@ -32,14 +34,29 @@ class Member extends Model
         'standing',
         'start_date',
         'last_login',
+        'savings_balance',
+        'share_capital',
+        'copra_sales_ytd',
+        'patronage_amount',
+        'migs_score',
+        'migs_classification',
+        'migs_breakdown',
+        'migs_calculated_at',
     ];
 
     protected $casts = [
-        'start_date' => 'date',
-        'last_login' => 'datetime',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'start_date'         => 'date',
+        'last_login'         => 'datetime',
+        'created_at'         => 'datetime',
+        'updated_at'         => 'datetime',
+        'migs_breakdown'     => 'array',
+        'migs_calculated_at' => 'datetime',
     ];
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 
     /**
      * Get the member registration associated with this member.
@@ -47,5 +64,20 @@ class Member extends Model
     public function memberRegistration(): BelongsTo
     {
         return $this->belongsTo(MemberRegistration::class);
+    }
+
+    public function copraSales(): HasMany
+    {
+        return $this->hasMany(CopraSale::class);
+    }
+
+    public function savingsTransactions(): HasMany
+    {
+        return $this->hasMany(SavingsTransaction::class);
+    }
+
+    public function capitalShareTransactions(): HasMany
+    {
+        return $this->hasMany(CapitalShareTransaction::class);
     }
 }

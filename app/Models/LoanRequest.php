@@ -11,10 +11,10 @@ class LoanRequest extends Model
 {
     use HasFactory;
 
-    const STATUS_PENDING = 'pending';
+    const STATUS_PENDING         = 'pending';
     const STATUS_FOR_BOD_APPROVAL = 'for_bod_approval';
-    const STATUS_APPROVED = 'approved';
-    const STATUS_REJECTED = 'rejected';
+    const STATUS_APPROVED         = 'approved';
+    const STATUS_REJECTED         = 'rejected';
 
     protected $fillable = [
         'amount',
@@ -22,8 +22,12 @@ class LoanRequest extends Model
         'requested_at',
         'interest_rate',
         'status',
-        'purpose', // Recommended for BOD review
+        'purpose',
         'term_months',
+        'rejection_reason',
+        'escalation_notes',
+        'reviewed_by',
+        'reviewed_at',
     ];
 
     protected $casts = [
@@ -34,6 +38,11 @@ class LoanRequest extends Model
     public function requestedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'requested_by');
+    }
+
+    public function reviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
     }
 
     public function loan(): HasOne

@@ -1,7 +1,8 @@
 import { Link } from '@inertiajs/react';
 import {
     LayoutGrid, Users, Clock, UserCircle, Banknote,
-    PercentCircle, CalendarDays, BarChart3, Search,
+    PercentCircle, CalendarDays, BarChart3, Search, Megaphone,
+    Leaf, PiggyBank, FileText,
 } from 'lucide-react';
 import {
     SidebarGroup,
@@ -16,7 +17,8 @@ const NAV_GROUPS = [
     {
         label: 'Overview',
         items: [
-            { title: 'Dashboard', href: '/superadmin/dashboard', icon: LayoutGrid },
+            { title: 'Dashboard',     href: '/superadmin/dashboard',     icon: LayoutGrid },
+            { title: 'Announcements', href: '/superadmin/announcements', icon: Megaphone },
         ],
     },
     {
@@ -29,8 +31,11 @@ const NAV_GROUPS = [
     {
         label: 'Cooperative',
         items: [
-            { title: 'All Members', href: '/superadmin/members', icon: UserCircle },
-            { title: 'All Loans',   href: '/superadmin/loans',   icon: Banknote },
+            { title: 'All Members',        href: '/superadmin/members',        icon: UserCircle },
+            { title: 'All Loans',          href: '/superadmin/loans',          icon: Banknote   },
+            { title: 'Loan Requests',      href: '/superadmin/loan-requests',  icon: FileText   },
+            { title: 'Copra Sales',        href: '/superadmin/copra-sales',    icon: Leaf       },
+            { title: 'Savings & Capital',  href: '/superadmin/savings',        icon: PiggyBank  },
         ],
     },
     {

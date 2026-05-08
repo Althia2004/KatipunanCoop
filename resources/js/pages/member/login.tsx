@@ -8,7 +8,7 @@ import PasswordInput from '@/components/password-input';
 import { ArrowLeft, Leaf } from 'lucide-react';
 
 export default function MemberLogin() {
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors } = useForm<{ email: string; password: string; auth?: string }>({
         email: '',
         password: '',
     });

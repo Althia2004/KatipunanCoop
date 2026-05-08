@@ -217,8 +217,9 @@ class SuperadminController extends Controller
 
         // Create User account only if one does not already exist
         $email = preg_replace('/\s+/', '', $memberRegistration->contact_number) . '@kscf.local';
-        if (!User::where('email', $email)->exists()) {
-            User::create([
+        $user  = User::where('email', $email)->first();
+        if (! $user) {
+            $user = User::create([
                 'name'              => trim("{$memberRegistration->first_name} {$memberRegistration->last_name}"),
                 'email'             => $email,
                 'password'          => 'Member@' . date('Y'),
@@ -230,6 +231,13 @@ class SuperadminController extends Controller
         activity()->causedBy(auth()->user())
             ->performedOn($memberRegistration)
             ->log('Member registration approved');
+
+        // Recalculate MIGS score and link user_id for the newly approved member
+        $newMember = \App\Models\Member::where('member_registration_id', $memberRegistration->id)->first();
+        if ($newMember) {
+            $newMember->update(['user_id' => $user->id]);
+            app(\App\Services\MigsScoreService::class)->recalculate($newMember);
+        }
 
         return back()->with('success', 'Registration approved. Member account created.');
     }
@@ -472,60 +480,76 @@ class SuperadminController extends Controller
 
     public function members()
     {
-        // Pre-load all member users keyed by email for O(1) lookup (avoids N+1)
-        $memberUsers = User::where('role', 'member')->get()->keyBy('email');
-
         $members = \App\Models\Member::with([
+                'user',
                 'memberRegistration.coMaker',
                 'memberRegistration.beneficiaries',
             ])
             ->whereNotIn('status', [\App\Models\Member::STATUS_PENDING, \App\Models\Member::STATUS_REJECTED])
             ->latest()
             ->get()
-            ->map(function ($m) use ($memberUsers) {
+            ->map(function ($m) {
                 $reg  = $m->memberRegistration;
-                $contactEmail = $reg
-                    ? preg_replace('/\s+/', '', $reg->contact_number) . '@kscf.local'
-                    : null;
-                $user = $contactEmail ? $memberUsers->get($contactEmail) : null;
+                $user = $m->user;
+
+                // Always pass the real email — the UI decides how to display placeholder addresses
+                $displayEmail = $user?->email ?? '—';
+
+                // Account status based on real email_verified_at
+                $accountStatus = $user?->email_verified_at ? 'verified'
+                    : ($user ? 'unverified' : 'no_account');
 
                 return [
                     'id'               => $m->id,
                     'name'             => $m->name,
                     'first_name'       => $reg?->first_name ?? '',
                     'last_name'        => $reg?->last_name ?? '',
-                    'email'            => $user?->email ?? '—',
-                    'email_verified_at' => $user?->email_verified_at,
-                    'created_at'       => $m->created_at->toISOString(),
+                    'email'            => $displayEmail,
                     'user_id'          => $user?->id,
-                    'contact_number'   => $reg?->contact_number ?? '',
-                    'source_of_income' => $reg?->source_of_income ?? '',
-                    'phone'            => $reg?->contact_number ?? '',
+                    'contact_number'   => $reg?->contact_number ?? '—',
+                    'source_of_income' => $reg?->source_of_income ?? '—',
+                    'gender'           => $reg?->gender ?? $m->gender ?? '—',
+                    'date_of_birth'    => $reg?->date_of_birth
+                        ? \Carbon\Carbon::parse($reg->date_of_birth)->format('M d, Y')
+                        : '—',
                     'address'          => $reg
                         ? trim(implode(', ', array_filter([
                             $reg->address_street,
                             $reg->address_barangay,
                             $reg->address_city,
                         ])))
-                        : '',
+                        : '—',
                     'member_since'     => $m->start_date?->format('M d, Y') ?? $m->created_at->format('M d, Y'),
-                    'share_capital'    => null,
+
+                    // Financial — real columns from members table
+                    'share_capital'    => (float) ($m->share_capital ?? 0),
+                    'savings_balance'  => (float) ($m->savings_balance ?? 0),
+
+                    // MIGS Score — real value from members table
+                    'migs_score'       => $m->migs_score ?? 0,
+                    'classification'   => $m->migs_classification ?? 'non_migs',
+
+                    // Member status from members table (approved/active/suspended/…)
                     'status'           => $m->status,
                     'membership_status' => $m->membership_status,
-                    'migs_score'       => null,
+                    'standing'         => $m->standing,
+
+                    // Account status (verified/unverified/no_account)
+                    'account_status'   => $accountStatus,
+
                     'co_makers'        => $reg?->coMaker ? [[
                         'id'             => $reg->coMaker->id,
-                        'first_name'     => $reg->coMaker->first_name,
-                        'last_name'      => $reg->coMaker->last_name,
-                        'contact_number' => $reg->coMaker->contact_number,
-                        'relationship'   => $reg->coMaker->relationship,
+                        'first_name'     => $reg->coMaker->first_name ?? '',
+                        'last_name'      => $reg->coMaker->last_name ?? '',
+                        'contact_number' => $reg->coMaker->contact_number ?? '—',
+                        'relationship'   => $reg->coMaker->relationship ?? '—',
                     ]] : [],
                     'beneficiaries'    => $reg?->beneficiaries->map(fn ($b) => [
                         'id'             => $b->id,
-                        'first_name'     => $b->first_name,
-                        'last_name'      => $b->last_name,
-                        'contact_number' => $b->contact_number,
-                        'relationship'   => $b->relationship,
+                        'first_name'     => $b->first_name ?? '',
+                        'last_name'      => $b->last_name ?? '',
+                        'contact_number' => $b->contact_number ?? '—',
+                        'relationship'   => $b->relationship ?? '—',
                     ])->toArray() ?? [],
                 ];
             });
@@ -577,16 +601,15 @@ class SuperadminController extends Controller
             ->performedOn($member)
             ->log('Member record updated by superadmin');
 
+        // Recalculate MIGS after member data changes
+        app(\App\Services\MigsScoreService::class)->recalculate($member);
+
         return back()->with('success', 'Member updated successfully.');
     }
 
     public function updateMemberAccount(Request $request, \App\Models\Member $member)
     {
-        $reg  = $member->memberRegistration;
-        $contactEmail = $reg
-            ? preg_replace('/\s+/', '', $reg->contact_number) . '@kscf.local'
-            : null;
-        $user = $contactEmail ? User::where('email', $contactEmail)->first() : null;
+        $user = $member->user;
 
         $validated = $request->validate([
             'email'    => ['required', 'email', Rule::unique('users', 'email')->ignore($user?->id)],
@@ -732,4 +755,513 @@ class SuperadminController extends Controller
 
         return back()->with('success', 'Loan deleted successfully.');
     }
+
+    // ── MIGS Score ────────────────────────────────────────────────────────────
+
+    public function recalculateMigs(\App\Models\Member $member)
+    {
+        $updated = app(\App\Services\MigsScoreService::class)->recalculate($member);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log('MIGS score recalculated: ' . $updated->migs_score . '/100 (' . $updated->migs_classification . ')');
+
+        return back()->with('success', 'MIGS score updated to ' . $updated->migs_score . '/100 for ' . $member->name);
+    }
+
+    public function recalculateAllMigs()
+    {
+        app(\App\Services\MigsScoreService::class)->recalculateAll();
+
+        activity()->causedBy(auth()->user())
+            ->log('MIGS scores recalculated for all members');
+
+        return back()->with('success', 'MIGS scores recalculated for all members.');
+    }
+
+    // ── Announcements ─────────────────────────────────────────────────────────
+
+    public function announcements()
+    {
+        $announcements = \App\Models\Announcement::with('creator')
+            ->latest()
+            ->get()
+            ->map(fn ($a) => [
+                'id'                => $a->id,
+                'title'             => $a->title,
+                'content'           => $a->content,
+                'category'          => $a->category,
+                'status'            => $a->status,
+                'announcement_date' => $a->announcement_date->format('M d, Y'),
+                'created_by'        => $a->creator?->name ?? 'System',
+                'created_at'        => $a->created_at->format('M d, Y'),
+            ]);
+
+        return inertia('Superadmin/Announcements', [
+            'announcements' => $announcements,
+            'stats' => [
+                'total'     => \App\Models\Announcement::count(),
+                'published' => \App\Models\Announcement::where('status', 'published')->count(),
+                'draft'     => \App\Models\Announcement::where('status', 'draft')->count(),
+            ],
+        ]);
+    }
+
+    public function storeAnnouncement(Request $request)
+    {
+        $validated = $request->validate([
+            'title'             => 'required|string|max:255',
+            'content'           => 'required|string',
+            'category'          => 'required|in:general,meeting,copra,seminar',
+            'status'            => 'required|in:draft,published',
+            'announcement_date' => 'required|date',
+        ]);
+
+        $validated['created_by'] = auth()->id();
+
+        $announcement = \App\Models\Announcement::create($validated);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($announcement)
+            ->log('Announcement created: ' . $announcement->title);
+
+        return back()->with('success', 'Announcement created successfully.');
+    }
+
+    public function updateAnnouncement(Request $request, \App\Models\Announcement $announcement)
+    {
+        $validated = $request->validate([
+            'title'             => 'required|string|max:255',
+            'content'           => 'required|string',
+            'category'          => 'required|in:general,meeting,copra,seminar',
+            'status'            => 'required|in:draft,published',
+            'announcement_date' => 'required|date',
+        ]);
+
+        $announcement->update($validated);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($announcement)
+            ->log('Announcement updated: ' . $announcement->title);
+
+        return back()->with('success', 'Announcement updated successfully.');
+    }
+
+    public function deleteAnnouncement(\App\Models\Announcement $announcement)
+    {
+        $title = $announcement->title;
+        $announcement->delete();
+
+        activity()->causedBy(auth()->user())
+            ->log('Announcement deleted: ' . $title);
+
+        return back()->with('success', 'Announcement deleted.');
+    }
+
+    public function toggleAnnouncement(\App\Models\Announcement $announcement)
+    {
+        $newStatus = $announcement->status === 'published' ? 'draft' : 'published';
+        $announcement->update(['status' => $newStatus]);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($announcement)
+            ->log('Announcement ' . $newStatus . ': ' . $announcement->title);
+
+        return back()->with('success', 'Announcement ' . $newStatus . '.');
+    }
+
+    // ── Copra Sales ───────────────────────────────────────────────────────────
+
+    public function coproSales(Request $request)
+    {
+        $year = $request->query('year', now()->year);
+
+        $members = \App\Models\Member::with(['memberRegistration', 'copraSales' => function ($q) use ($year) {
+            $q->whereYear('sale_date', $year)->orderByDesc('sale_date');
+        }])
+        ->whereIn('status', ['approved', 'active'])
+        ->orderBy('name')
+        ->get()
+        ->map(function ($m) use ($year) {
+            $sales = $m->copraSales;
+            return [
+                'id'             => $m->id,
+                'name'           => $m->name,
+                'ytd_gross'      => (float) $sales->sum('gross_amount'),
+                'ytd_net'        => (float) $sales->sum('net_amount'),
+                'ytd_kilos'      => (float) $sales->sum('kilos'),
+                'sales'          => $sales->map(fn ($s) => [
+                    'id'               => $s->id,
+                    'sale_date'        => $s->sale_date->format('M d, Y'),
+                    'kilos'            => (float) $s->kilos,
+                    'price_per_kilo'   => (float) $s->price_per_kilo,
+                    'gross_amount'     => (float) $s->gross_amount,
+                    'deduction_amount' => (float) $s->deduction_amount,
+                    'deduction_type'   => $s->deduction_type,
+                    'net_amount'       => (float) $s->net_amount,
+                    'remarks'          => $s->remarks,
+                ])->values(),
+            ];
+        });
+
+        $totalGross = \App\Models\CopraSale::whereYear('sale_date', $year)->sum('gross_amount');
+        $totalNet   = \App\Models\CopraSale::whereYear('sale_date', $year)->sum('net_amount');
+        $totalKilos = \App\Models\CopraSale::whereYear('sale_date', $year)->sum('kilos');
+        $totalTxns  = \App\Models\CopraSale::whereYear('sale_date', $year)->count();
+
+        return inertia('Superadmin/CoproSales', [
+            'members'     => $members,
+            'year'        => (int) $year,
+            'years'       => range(now()->year, max(2020, now()->year - 5)),
+            'stats'       => [
+                'total_gross'        => (float) $totalGross,
+                'total_net'          => (float) $totalNet,
+                'total_kilos'        => (float) $totalKilos,
+                'total_transactions' => (int) $totalTxns,
+            ],
+        ]);
+    }
+
+    public function storeCoproSale(Request $request, \App\Models\Member $member)
+    {
+        $validated = $request->validate([
+            'sale_date'        => 'required|date',
+            'kilos'            => 'required|numeric|min:0.01',
+            'price_per_kilo'   => 'required|numeric|min:0.01',
+            'deduction_amount' => 'nullable|numeric|min:0',
+            'deduction_type'   => 'nullable|string|in:loan_payment,savings,manual',
+            'remarks'          => 'nullable|string|max:500',
+        ]);
+
+        $gross      = round($validated['kilos'] * $validated['price_per_kilo'], 2);
+        $deduction  = (float) ($validated['deduction_amount'] ?? 0);
+        $net        = max(0, $gross - $deduction);
+
+        $sale = $member->copraSales()->create([
+            'sale_date'        => $validated['sale_date'],
+            'kilos'            => $validated['kilos'],
+            'price_per_kilo'   => $validated['price_per_kilo'],
+            'gross_amount'     => $gross,
+            'deduction_amount' => $deduction,
+            'deduction_type'   => $validated['deduction_type'] ?? null,
+            'net_amount'       => $net,
+            'remarks'          => $validated['remarks'] ?? null,
+            'recorded_by'      => auth()->id(),
+        ]);
+
+        // Update member's copra_sales_ytd
+        $ytd = $member->copraSales()->whereYear('sale_date', now()->year)->sum('gross_amount');
+        $member->update(['copra_sales_ytd' => $ytd]);
+
+        app(\App\Services\MigsScoreService::class)->recalculate($member);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log("Copra sale recorded: {$validated['kilos']} kg @ ₱{$validated['price_per_kilo']}/kg = ₱{$gross} gross");
+
+        return back()->with('success', 'Copra sale recorded.');
+    }
+
+    public function deleteCoproSale(\App\Models\CopraSale $copraSale)
+    {
+        $member = $copraSale->member;
+        $copraSale->delete();
+
+        // Recalculate YTD
+        $ytd = $member->copraSales()->whereYear('sale_date', now()->year)->sum('gross_amount');
+        $member->update(['copra_sales_ytd' => $ytd]);
+
+        app(\App\Services\MigsScoreService::class)->recalculate($member);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log('Copra sale deleted');
+
+        return back()->with('success', 'Copra sale deleted.');
+    }
+
+    // ── Savings & Capital ─────────────────────────────────────────────────────
+
+    public function savingsOverview()
+    {
+        $members = \App\Models\Member::with(['memberRegistration'])
+            ->whereIn('status', ['approved', 'active'])
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($m) => [
+                'id'              => $m->id,
+                'name'            => $m->name,
+                'savings_balance' => (float) ($m->savings_balance ?? 0),
+                'share_capital'   => (float) ($m->share_capital ?? 0),
+            ]);
+
+        $totalSavings = \App\Models\Member::whereIn('status', ['approved', 'active'])->sum('savings_balance');
+        $totalCapital = \App\Models\Member::whereIn('status', ['approved', 'active'])->sum('share_capital');
+        $totalMembers = $members->count();
+
+        return inertia('Superadmin/SavingsOverview', [
+            'members' => $members,
+            'stats'   => [
+                'total_savings' => (float) $totalSavings,
+                'total_capital' => (float) $totalCapital,
+                'total_members' => (int) $totalMembers,
+            ],
+        ]);
+    }
+
+    public function savingsDeposit(Request $request, \App\Models\Member $member)
+    {
+        $validated = $request->validate([
+            'amount'  => 'required|numeric|min:0.01',
+            'remarks' => 'nullable|string|max:500',
+        ]);
+
+        $newBalance = (float) ($member->savings_balance ?? 0) + (float) $validated['amount'];
+
+        \App\Models\SavingsTransaction::create([
+            'member_id'     => $member->id,
+            'type'          => 'deposit',
+            'amount'        => $validated['amount'],
+            'balance_after' => $newBalance,
+            'remarks'       => $validated['remarks'] ?? null,
+            'recorded_by'   => auth()->id(),
+        ]);
+
+        $member->update(['savings_balance' => $newBalance]);
+        app(\App\Services\MigsScoreService::class)->recalculate($member);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log("Savings deposit: ₱{$validated['amount']}. New balance: ₱{$newBalance}");
+
+        return back()->with('success', 'Savings deposit recorded.');
+    }
+
+    public function savingsWithdraw(Request $request, \App\Models\Member $member)
+    {
+        $validated = $request->validate([
+            'amount'  => 'required|numeric|min:0.01',
+            'remarks' => 'nullable|string|max:500',
+        ]);
+
+        $currentBalance = (float) ($member->savings_balance ?? 0);
+        if ((float) $validated['amount'] > $currentBalance) {
+            return back()->withErrors(['amount' => 'Withdrawal amount exceeds savings balance.']);
+        }
+
+        $newBalance = $currentBalance - (float) $validated['amount'];
+
+        \App\Models\SavingsTransaction::create([
+            'member_id'     => $member->id,
+            'type'          => 'withdrawal',
+            'amount'        => $validated['amount'],
+            'balance_after' => $newBalance,
+            'remarks'       => $validated['remarks'] ?? null,
+            'recorded_by'   => auth()->id(),
+        ]);
+
+        $member->update(['savings_balance' => $newBalance]);
+        app(\App\Services\MigsScoreService::class)->recalculate($member);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log("Savings withdrawal: ₱{$validated['amount']}. New balance: ₱{$newBalance}");
+
+        return back()->with('success', 'Savings withdrawal recorded.');
+    }
+
+    public function capitalAdjust(Request $request, \App\Models\Member $member)
+    {
+        $validated = $request->validate([
+            'type'    => 'required|in:credit,debit',
+            'amount'  => 'required|numeric|min:0.01',
+            'remarks' => 'nullable|string|max:500',
+        ]);
+
+        $current = (float) ($member->share_capital ?? 0);
+        $newBalance = $validated['type'] === 'credit'
+            ? $current + (float) $validated['amount']
+            : max(0, $current - (float) $validated['amount']);
+
+        \App\Models\CapitalShareTransaction::create([
+            'member_id'     => $member->id,
+            'type'          => $validated['type'],
+            'amount'        => $validated['amount'],
+            'balance_after' => $newBalance,
+            'remarks'       => $validated['remarks'] ?? null,
+            'recorded_by'   => auth()->id(),
+        ]);
+
+        $member->update(['share_capital' => $newBalance]);
+        app(\App\Services\MigsScoreService::class)->recalculate($member);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log("Capital share {$validated['type']}: ₱{$validated['amount']}. New balance: ₱{$newBalance}");
+
+        return back()->with('success', 'Capital share updated.');
+    }
+
+    public function savingsHistory(\App\Models\Member $member)
+    {
+        $savings = $member->savingsTransactions()
+            ->with('recorder:id,name')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($t) => [
+                'id'            => $t->id,
+                'type'          => $t->type,
+                'amount'        => (float) $t->amount,
+                'balance_after' => (float) $t->balance_after,
+                'remarks'       => $t->remarks,
+                'recorded_by'   => $t->recorder?->name ?? '—',
+                'created_at'    => $t->created_at->format('M d, Y h:i A'),
+            ]);
+
+        $capital = $member->capitalShareTransactions()
+            ->with('recorder:id,name')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($t) => [
+                'id'            => $t->id,
+                'type'          => $t->type,
+                'amount'        => (float) $t->amount,
+                'balance_after' => (float) $t->balance_after,
+                'remarks'       => $t->remarks,
+                'recorded_by'   => $t->recorder?->name ?? '—',
+                'created_at'    => $t->created_at->format('M d, Y h:i A'),
+            ]);
+
+        return response()->json([
+            'member_name'     => $member->name,
+            'savings_balance' => (float) ($member->savings_balance ?? 0),
+            'share_capital'   => (float) ($member->share_capital ?? 0),
+            'savings'         => $savings,
+            'capital'         => $capital,
+        ]);
+    }
+
+    // ── BOD Loan Request Approval ─────────────────────────────────────────────
+
+    public function loanRequests(\Illuminate\Http\Request $request)
+    {
+        $query = \App\Models\LoanRequest::with(['requestedBy', 'reviewer'])->latest();
+
+        if ($request->filled('status') && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->whereHas('requestedBy', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%");
+            })->orWhere('purpose', 'like', "%{$search}%");
+        }
+
+        $requests = $query->paginate(15)->through(fn ($lr) => [
+            'id'               => $lr->id,
+            'member_name'      => $lr->requestedBy?->name ?? '—',
+            'member_id'        => $lr->requested_by,
+            'amount'           => (float) $lr->amount,
+            'purpose'          => $lr->purpose,
+            'term_months'      => $lr->term_months,
+            'interest_rate'    => $lr->interest_rate,
+            'status'           => $lr->status,
+            'rejection_reason' => $lr->rejection_reason,
+            'escalation_notes' => $lr->escalation_notes,
+            'reviewed_by'      => $lr->reviewer?->name,
+            'reviewed_at'      => $lr->reviewed_at
+                ? \Carbon\Carbon::parse($lr->reviewed_at)->format('M d, Y')
+                : null,
+            'created_at'       => $lr->created_at->format('M d, Y'),
+            'is_bod_required'  => (float) $lr->amount > 50000,
+        ]);
+
+        return inertia('Superadmin/LoanRequests', [
+            'requests' => $requests,
+            'filters'  => $request->only(['search', 'status']),
+            'stats'    => [
+                'total'    => \App\Models\LoanRequest::count(),
+                'pending'  => \App\Models\LoanRequest::where('status', 'pending')->count(),
+                'for_bod'  => \App\Models\LoanRequest::where('status', 'for_bod_approval')->count(),
+                'approved' => \App\Models\LoanRequest::where('status', 'approved')->count(),
+                'rejected' => \App\Models\LoanRequest::where('status', 'rejected')->count(),
+            ],
+        ]);
+    }
+
+    public function approveLoanRequest(\Illuminate\Http\Request $request, \App\Models\LoanRequest $loanRequest)
+    {
+        if ($loanRequest->status === 'approved') {
+            return back()->withErrors(['error' => 'Already approved.']);
+        }
+
+        $loanRequest->update([
+            'status'      => 'approved',
+            'reviewed_by' => auth()->id(),
+            'reviewed_at' => now(),
+        ]);
+
+        $loan = \App\Models\Loan::create([
+            'member_id'         => $loanRequest->requested_by,
+            'loan_request_id'   => $loanRequest->id,
+            'principal_amount'  => $loanRequest->amount,
+            'remaining_balance' => $loanRequest->amount,
+            'interest_rate'     => $loanRequest->interest_rate ?? 3,
+            'term_months'       => $loanRequest->term_months ?? 12,
+            'total_payable'     => $this->computeLoanTotalPayable(
+                (float) $loanRequest->amount,
+                (float) ($loanRequest->interest_rate ?? 3),
+                (int)   ($loanRequest->term_months ?? 12)
+            ),
+            'status'            => 'active',
+        ]);
+
+        app(\App\Http\Controllers\LoanRequestController::class)->generateAmortizationPublic($loan);
+
+        $member = \App\Models\Member::where('user_id', $loanRequest->requested_by)->first();
+        if ($member) {
+            app(\App\Services\MigsScoreService::class)->recalculate($member);
+        }
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($loanRequest)
+            ->log('BOD approved Loan Request #' . $loanRequest->id . ' — ₱' . number_format($loanRequest->amount, 2));
+
+        return back()->with('success', 'Loan approved by BOD and activated.');
+    }
+
+    public function rejectLoanRequest(\Illuminate\Http\Request $request, \App\Models\LoanRequest $loanRequest)
+    {
+        $validated = $request->validate([
+            'rejection_reason' => 'required|string|min:10|max:500',
+        ]);
+
+        $loanRequest->update([
+            'status'           => 'rejected',
+            'rejection_reason' => $validated['rejection_reason'],
+            'reviewed_by'      => auth()->id(),
+            'reviewed_at'      => now(),
+        ]);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($loanRequest)
+            ->log('BOD rejected Loan Request #' . $loanRequest->id . ' — Reason: ' . $validated['rejection_reason']);
+
+        return back()->with('success', 'Loan request rejected by BOD.');
+    }
+
+    private function computeLoanTotalPayable(float $principal, float $monthlyRate, int $termMonths): float
+    {
+        $rate = $monthlyRate / 100;
+        if ($rate > 0) {
+            $monthly = $principal * ($rate * pow(1 + $rate, $termMonths))
+                / (pow(1 + $rate, $termMonths) - 1);
+        } else {
+            $monthly = $principal / $termMonths;
+        }
+
+        return round($monthly * $termMonths, 2);
+    }
 }
+

@@ -46,31 +46,15 @@ const TESTIMONIALS = [
     },
 ];
 
-const ANNOUNCEMENTS = [
-    {
-        date: 'April 17, 2026',
-        title: 'Board Meeting — April 2026',
-        desc: 'The regular monthly board meeting will be held at the cooperative office. All directors are required to attend.',
-    },
-    {
-        date: 'April 20, 2026',
-        title: 'Copra Buying Price Update',
-        desc: 'Effective this week, the copra buying price has been adjusted. Members are advised to check the bulletin board.',
-    },
-    {
-        date: 'April 24, 2026',
-        title: 'General Assembly — 3rd Thursday',
-        desc: 'The monthly General Assembly is scheduled. All members are encouraged to attend and participate.',
-    },
-];
-
 // ── component ────────────────────────────────────────────────────────────────
 
 export default function Welcome({
     canResetPassword = true,
+    announcements = [],
 }: {
     canRegister?: boolean;
     canResetPassword?: boolean;
+    announcements?: Array<{ id: number; date: string; title: string; desc: string; category: string }>;
 }) {
     const [menuOpen, setMenuOpen] = useState(false);
     const [adminModalOpen, setAdminModalOpen] = useState(false);
@@ -435,8 +419,12 @@ export default function Welcome({
                     <div className="max-w-7xl mx-auto">
                         <h2 className="text-3xl font-bold text-center text-[#1a1a1a] mb-12">Latest Announcements</h2>
                         <div className="grid md:grid-cols-3 gap-6 mb-8">
-                            {ANNOUNCEMENTS.map(a => (
-                                <div key={a.title}
+                            {announcements.length === 0 ? (
+                                <div className="col-span-3 text-center py-12 text-zinc-400">
+                                    <p>No announcements yet. Check back soon.</p>
+                                </div>
+                            ) : announcements.map(a => (
+                                <div key={a.id}
                                     className="border border-zinc-200 rounded-2xl p-6 hover:shadow-md transition space-y-3">
                                     <span className="inline-block px-3 py-1 bg-[#c8920a]/15 text-[#c8920a] text-xs font-semibold rounded-full">
                                         {a.date}

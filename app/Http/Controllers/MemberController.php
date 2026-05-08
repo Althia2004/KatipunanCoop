@@ -3,9 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Member;
+use App\Models\Loan;
+use App\Models\LoanAmortization;
+use App\Models\LoanPayment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Response as HttpResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -224,5 +228,420 @@ class MemberController extends Controller
             ->log('Member deletion requested — awaiting superadmin approval');
 
         return back()->with('success', 'Deletion request submitted. Awaiting Superadmin approval.');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // AMORTIZATION SCHEDULES
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public function amortization(Request $request): Response
+    {
+        $search = $request->input('search', '');
+        $status = $request->input('status', '');
+
+        $query = LoanAmortization::with(['loan.borrower'])
+            ->orderBy('due_date', 'asc');
+
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        if ($search) {
+            $query->whereHas('loan.borrower', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%");
+            });
+        }
+
+        $amortizations = $query->paginate(20)->through(fn ($a) => [
+            'id'             => $a->id,
+            'loan_id'        => $a->loan_id,
+            'member_name'    => $a->loan?->borrower?->name ?? '—',
+            'due_date'       => $a->due_date,
+            'amount_to_pay'  => $a->amount_to_pay,
+            'principal_part' => $a->principal_part,
+            'interest_part'  => $a->interest_part,
+            'status'         => $a->status,
+            'paid_at'        => $a->updated_at?->format('M d, Y'),
+        ]);
+
+        $stats = [
+            'total'   => LoanAmortization::count(),
+            'pending' => LoanAmortization::where('status', 'pending')->count(),
+            'paid'    => LoanAmortization::where('status', 'paid')->count(),
+            'overdue' => LoanAmortization::where('status', 'overdue')->count(),
+        ];
+
+        return Inertia::render('User/Amortization', [
+            'amortizations' => $amortizations,
+            'stats'         => $stats,
+            'filters'       => ['search' => $search, 'status' => $status],
+        ]);
+    }
+
+    public function downloadAmortization(): HttpResponse
+    {
+        $rows = LoanAmortization::with(['loan.borrower'])->orderBy('due_date')->get();
+
+        $csv = implode(',', ['Member Name', 'Loan ID', 'Due Date', 'Amount Due', 'Principal Part', 'Interest Part', 'Status', 'Paid At']) . "\n";
+        foreach ($rows as $a) {
+            $csv .= implode(',', [
+                '"' . ($a->loan?->borrower?->name ?? '') . '"',
+                $a->loan_id,
+                $a->due_date,
+                $a->amount_to_pay,
+                $a->principal_part,
+                $a->interest_part,
+                $a->status,
+                $a->status === 'paid' ? $a->updated_at?->format('Y-m-d') : '',
+            ]) . "\n";
+        }
+
+        return response($csv, 200, [
+            'Content-Type'        => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="amortization_schedules.csv"',
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SAVINGS INTEREST
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public function savingsInterest(Request $request): Response
+    {
+        $year   = (int) $request->input('year', now()->year);
+        $caRate = 2;
+
+        $members = Member::with('memberRegistration')
+            ->whereNotIn('status', [Member::STATUS_PENDING, Member::STATUS_REJECTED])
+            ->get()
+            ->map(fn ($m) => [
+                'id'              => $m->id,
+                'name'            => $m->name,
+                'savings_balance' => (float) $m->savings_balance,
+                'share_capital'   => (float) $m->share_capital,
+                'interest_earned' => round((float) $m->savings_balance * ($caRate / 100), 2),
+                'year'            => $year,
+                'status'          => $m->status,
+            ]);
+
+        return Inertia::render('User/SavingsInterest', [
+            'members'          => $members->values(),
+            'year'             => $year,
+            'caRate'           => $caRate,
+            'totalMembers'     => $members->count(),
+            'totalSavings'     => $members->sum('savings_balance'),
+            'totalInterest'    => $members->sum('interest_earned'),
+            'availableYears'   => range(now()->year, now()->year - 5),
+        ]);
+    }
+
+    public function downloadSavingsInterest(Request $request): HttpResponse
+    {
+        $year   = (int) $request->input('year', now()->year);
+        $caRate = 2;
+        $rows   = Member::whereNotIn('status', [Member::STATUS_PENDING, Member::STATUS_REJECTED])->get();
+
+        $csv = implode(',', ['Member Name', 'Savings Balance', 'Interest Rate (%)', 'Interest Earned', 'Status', 'Year']) . "\n";
+        foreach ($rows as $m) {
+            $interest = round((float) $m->savings_balance * ($caRate / 100), 2);
+            $csv .= implode(',', [
+                '"' . $m->name . '"',
+                $m->savings_balance,
+                $caRate,
+                $interest,
+                $m->status,
+                $year,
+            ]) . "\n";
+        }
+
+        return response($csv, 200, [
+            'Content-Type'        => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"savings_interest_{$year}.csv\"",
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DIVIDEND REPORTS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public function dividendReports(Request $request): Response
+    {
+        $year         = (int) $request->input('year', now()->year);
+        $totalCapital = (float) (Member::sum('share_capital') ?? 0);
+
+        $members = Member::with('memberRegistration')
+            ->whereNotIn('status', [Member::STATUS_PENDING, Member::STATUS_REJECTED])
+            ->get()
+            ->map(fn ($m) => [
+                'id'              => $m->id,
+                'name'            => $m->name,
+                'share_capital'   => (float) $m->share_capital,
+                'capital_pct'     => $totalCapital > 0
+                    ? round(((float) $m->share_capital / $totalCapital) * 100, 2)
+                    : 0,
+                'dividend_amount' => 0,
+                'status'          => 'tentative',
+                'year'            => $year,
+            ]);
+
+        return Inertia::render('User/DividendReports', [
+            'members'        => $members->values(),
+            'year'           => $year,
+            'totalCapital'   => $totalCapital,
+            'totalMembers'   => $members->count(),
+            'availableYears' => range(now()->year, now()->year - 5),
+        ]);
+    }
+
+    public function downloadDividendReports(Request $request): HttpResponse
+    {
+        $year         = (int) $request->input('year', now()->year);
+        $totalCapital = (float) (Member::sum('share_capital') ?? 0);
+        $rows         = Member::whereNotIn('status', [Member::STATUS_PENDING, Member::STATUS_REJECTED])->get();
+
+        $csv = implode(',', ['Member Name', 'Share Capital', 'Capital %', 'Dividend Amount', 'Year', 'Status']) . "\n";
+        foreach ($rows as $m) {
+            $pct = $totalCapital > 0 ? round(((float) $m->share_capital / $totalCapital) * 100, 2) : 0;
+            $csv .= implode(',', [
+                '"' . $m->name . '"',
+                $m->share_capital,
+                $pct,
+                0,
+                $year,
+                'tentative',
+            ]) . "\n";
+        }
+
+        return response($csv, 200, [
+            'Content-Type'        => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"dividend_reports_{$year}.csv\"",
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PATRONAGE REPORTS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public function patronageReports(Request $request): Response
+    {
+        $year        = (int) $request->input('year', now()->year);
+        $totalCopra  = (float) (Member::sum('copra_sales_ytd') ?? 0);
+
+        $members = Member::with('memberRegistration')
+            ->whereNotIn('status', [Member::STATUS_PENDING, Member::STATUS_REJECTED])
+            ->get()
+            ->map(fn ($m) => [
+                'id'               => $m->id,
+                'name'             => $m->name,
+                'share_capital'    => (float) $m->share_capital,
+                'copra_sales'      => (float) $m->copra_sales_ytd,
+                'patronage_amount' => (float) $m->patronage_amount,
+                'status'           => 'tentative',
+                'year'             => $year,
+            ]);
+
+        return Inertia::render('User/PatronageReports', [
+            'members'        => $members->values(),
+            'year'           => $year,
+            'totalPatronage' => (float) (Member::sum('patronage_amount') ?? 0),
+            'totalCopra'     => $totalCopra,
+            'totalMembers'   => $members->count(),
+            'isReleased'     => false,
+            'availableYears' => range(now()->year, now()->year - 5),
+        ]);
+    }
+
+    public function requestPatronageRelease(Request $request): RedirectResponse
+    {
+        activity()->causedBy(auth()->user())
+            ->log('Patronage annual release requested for year ' . now()->year);
+
+        return back()->with('success', 'Annual patronage release request submitted successfully.');
+    }
+
+    public function downloadPatronage(Request $request): HttpResponse
+    {
+        $year = (int) $request->input('year', now()->year);
+        $rows = Member::whereNotIn('status', [Member::STATUS_PENDING, Member::STATUS_REJECTED])->get();
+
+        $csv = implode(',', ['Member Name', 'Share Capital', 'Copra Sales YTD', 'Patronage Amount', 'Year', 'Status']) . "\n";
+        foreach ($rows as $m) {
+            $csv .= implode(',', [
+                '"' . $m->name . '"',
+                $m->share_capital,
+                $m->copra_sales_ytd,
+                $m->patronage_amount,
+                $year,
+                'tentative',
+            ]) . "\n";
+        }
+
+        return response($csv, 200, [
+            'Content-Type'        => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"patronage_reports_{$year}.csv\"",
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PAYMENT DASHBOARD
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public function payments(Request $request): Response
+    {
+        $search = $request->input('search', '');
+        $method = $request->input('method', '');
+
+        $query = LoanPayment::with(['loan.borrower', 'recordedBy', 'updatedBy'])
+            ->orderBy('payment_date', 'desc');
+
+        if ($method && $method !== 'all') {
+            $query->where('payment_method', $method);
+        }
+
+        if ($search) {
+            $query->whereHas('loan.borrower', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%");
+            });
+        }
+
+        $payments = $query->paginate(20)->through(fn ($p) => [
+            'id'               => $p->id,
+            'loan_id'          => $p->loan_id,
+            'member_name'      => $p->loan?->borrower?->name ?? '—',
+            'amount_paid'      => $p->amount_paid,
+            'payment_date'     => $p->payment_date,
+            'payment_method'   => $p->payment_method,
+            'payment_type'     => $p->payment_type,
+            'reference_number' => $p->reference_number,
+            'remarks'          => $p->remarks,
+            'recorded_by_name' => $p->recordedBy?->name ?? '—',
+            'updated_by_name'  => $p->updatedBy?->name,
+            'recorded_at'      => $p->created_at?->format('M d, Y g:i A'),
+            'updated_at'       => $p->updated_at?->format('M d, Y g:i A'),
+        ]);
+
+        $totalCollected = LoanPayment::sum('amount_paid');
+        $onsite         = LoanPayment::where('payment_type', 'onsite')->count();
+        $online         = LoanPayment::where('payment_type', 'online')->count();
+
+        // Loans link to users via member_id → users.id
+        $borrowers = \App\Models\User::whereHas('loans', fn ($q) => $q->where('status', '!=', 'fully_paid'))
+            ->select('id', 'name')
+            ->get()
+            ->map(fn ($u) => [
+                'id'    => $u->id,
+                'name'  => $u->name,
+                'loans' => Loan::where('member_id', $u->id)
+                    ->where('status', '!=', 'fully_paid')
+                    ->select('id', 'remaining_balance', 'status')
+                    ->get(),
+            ]);
+
+        return Inertia::render('User/PaymentDashboard', [
+            'payments'       => $payments,
+            'stats'          => [
+                'total'     => LoanPayment::count(),
+                'collected' => $totalCollected,
+                'onsite'    => $onsite,
+                'online'    => $online,
+            ],
+            'members'        => $borrowers->values(),
+            'filters'        => ['search' => $search, 'method' => $method],
+        ]);
+    }
+
+    public function recordPayment(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'loan_id'          => 'required|exists:loans,id',
+            'amount_paid'      => 'required|numeric|min:0.01',
+            'payment_date'     => 'required|date',
+            'payment_method'   => 'required|in:Cash,GCash,Maya,BPI,Credit Card,Debit Card',
+            'payment_type'     => 'required|in:onsite,online',
+            'reference_number' => 'nullable|string|max:100',
+            'remarks'          => 'nullable|string|max:500',
+        ]);
+
+        $validated['recorded_by'] = auth()->id();
+
+        $payment = LoanPayment::create($validated);
+
+        $loan = Loan::findOrFail($validated['loan_id']);
+        $newBalance = max(0, ((float) $loan->remaining_balance) - ((float) $validated['amount_paid']));
+        $loan->update([
+            'remaining_balance' => $newBalance,
+            'status' => $newBalance <= 0 ? 'fully_paid' : $loan->status,
+        ]);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($payment)
+            ->log('Payment of ₱' . number_format($validated['amount_paid'], 2) . ' recorded for Loan #' . $validated['loan_id'] . ' via ' . $validated['payment_method']);
+
+        // Recalculate MIGS score for the member who made the payment
+        $member = \App\Models\Member::whereHas('memberRegistration', function ($q) use ($loan) {
+            $q->whereRaw(
+                "REPLACE(contact_number, ' ', '') || '@kscf.local' = (SELECT email FROM users WHERE id = ?)",
+                [$loan->member_id]
+            );
+        })->first();
+        if ($member) {
+            app(\App\Services\MigsScoreService::class)->recalculate($member);
+        }
+
+        return back()->with('success', 'Payment recorded successfully.');
+    }
+
+    public function updatePayment(Request $request, LoanPayment $payment): RedirectResponse
+    {
+        $validated = $request->validate([
+            'amount_paid'      => 'required|numeric|min:0.01',
+            'payment_date'     => 'required|date',
+            'payment_method'   => 'required|in:Cash,GCash,Maya,BPI,Credit Card,Debit Card',
+            'payment_type'     => 'required|in:onsite,online',
+            'reference_number' => 'nullable|string|max:100',
+            'remarks'          => 'nullable|string|max:500',
+        ]);
+
+        $payment->update(array_merge($validated, ['updated_by' => auth()->id()]));
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($payment)
+            ->log('Payment #' . $payment->id . ' edited by ' . auth()->user()->name);
+
+        return back()->with('success', 'Payment updated successfully.');
+    }
+
+    public function downloadReceipt(LoanPayment $payment): HttpResponse
+    {
+        $loan       = $payment->load(['loan.member', 'recordedBy']);
+        $memberName = $payment->loan?->member?->name ?? 'N/A';
+        $recorder   = $payment->recordedBy?->name ?? 'N/A';
+
+        $receipt = implode("\n", [
+            '================================================',
+            'KATIPUNAN SMALL COCONUT FARMERS MPC',
+            '        OFFICIAL PAYMENT RECEIPT',
+            '================================================',
+            'Receipt No:     ' . str_pad($payment->id, 6, '0', STR_PAD_LEFT),
+            'Date:           ' . now()->format('M d, Y'),
+            '------------------------------------------------',
+            'Member:         ' . $memberName,
+            'Loan ID:        #' . $payment->loan_id,
+            'Amount Paid:    ₱' . number_format($payment->amount_paid, 2),
+            'Method:         ' . strtoupper($payment->payment_method),
+            'Type:           ' . strtoupper($payment->payment_type),
+            'Reference:      ' . ($payment->reference_number ?: 'N/A'),
+            '------------------------------------------------',
+            'Recorded By:    ' . $recorder,
+            'Recorded At:    ' . $payment->created_at?->format('M d, Y g:i A'),
+            '================================================',
+            'KSCFMPC - Katipunan, Davao del Norte',
+            '================================================',
+        ]);
+
+        return response($receipt, 200, [
+            'Content-Type'        => 'text/plain',
+            'Content-Disposition' => "attachment; filename=\"receipt_{$payment->id}.txt\"",
+        ]);
     }
 }
