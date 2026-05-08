@@ -10,8 +10,8 @@ class EnsureMemberRole
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (!$request->user() || $request->user()->role !== 'member') {
-            return redirect()->route('member.login');
+        if (!auth()->check() || auth()->user()->role !== 'member') {
+            return redirect('/member/login');
         }
 
         return $next($request);

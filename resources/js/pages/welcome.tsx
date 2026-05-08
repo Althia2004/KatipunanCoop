@@ -73,8 +73,9 @@ export default function Welcome({
         if (role === 'board') return '/board/dashboard';
         if (role === 'bookkeeper') return '/bookkeeper/dashboard';
         if (role === 'hr') return '/hr/dashboard';
+        if (role === 'admin' && currentTeam?.slug) return `/${currentTeam.slug}/dashboard`;
         if (currentTeam?.slug) return `/${currentTeam.slug}/dashboard`;
-        return '/dashboard';
+        return '/login';
     };
 
     const dashboardUrl = getDashboardUrl();

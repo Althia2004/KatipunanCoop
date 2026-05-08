@@ -3,7 +3,6 @@
 namespace App\Http\Responses;
 
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\URL;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -13,26 +12,40 @@ class LoginResponse implements LoginResponseContract
     {
         $user = $request->user();
 
-        if (! $user) {
+        if (!$user) {
             abort(403);
         }
 
-        $routeName = $user->dashboardRouteName();
-        $parameters = [];
-
-        if ($routeName === 'dashboard') {
-            $team = $user->currentTeam ?? $user->personalTeam();
-
-            if (! $team) {
-                abort(403);
-            }
-
-            URL::defaults(['current_team' => $team->slug]);
-            $parameters = ['current_team' => $team->slug];
+        if ($request->wantsJson()) {
+            return new JsonResponse(['two_factor' => false], 200);
         }
 
-        return $request->wantsJson()
-            ? new JsonResponse(['two_factor' => false], 200)
-            : redirect()->intended(route($routeName, $parameters));
+        // Admin uses team-based dashboard
+        if ($user->role === 'admin') {
+            $team = $user->currentTeam ?? $user->personalTeam();
+            if (!$team) {
+                $team = $user->teams()->first();
+                if ($team) {
+                    $user->update(['current_team_id' => $team->id]);
+                }
+            }
+            if ($team) {
+                return redirect('/' . $team->slug . '/dashboard');
+            }
+            // No team at all — safe fallback
+            return redirect('/superadmin/dashboard');
+        }
+
+        $redirect = match($user->role) {
+            'superadmin' => '/superadmin/dashboard',
+            'manager'    => '/manager/dashboard',
+            'bookkeeper' => '/bookkeeper/dashboard',
+            'hr'         => '/hr/dashboard',
+            'board'      => '/board/dashboard',
+            'member'     => '/member/dashboard',
+            default      => '/login',
+        };
+
+        return redirect()->intended($redirect);
     }
 }
