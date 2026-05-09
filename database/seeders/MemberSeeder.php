@@ -34,9 +34,20 @@ class MemberSeeder extends Seeder
             ]
         );
 
+        $user = User::firstOrCreate(
+            ['email' => '09171234567@kscf.local'],
+            [
+                'name'              => 'Juan Dela Cruz',
+                'password'          => 'Member@2026',
+                'role'              => 'member',
+                'email_verified_at' => now(),
+            ]
+        );
+
         Member::firstOrCreate(
             ['member_registration_id' => $registration->id],
             [
+                'user_id'            => $user->id,
                 'name'                => 'Juan Dela Cruz',
                 'gender'              => 'male',
                 'status'              => Member::STATUS_APPROVED,
@@ -48,16 +59,6 @@ class MemberSeeder extends Seeder
                 'copra_sales_ytd'     => 25000.00,
                 'migs_score'          => 75,
                 'migs_classification' => 'migs_eligible',
-            ]
-        );
-
-        User::firstOrCreate(
-            ['email' => '09171234567@kscf.local'],
-            [
-                'name'              => 'Juan Dela Cruz',
-                'password'          => 'Member@2026',
-                'role'              => 'member',
-                'email_verified_at' => now(),
             ]
         );
     }

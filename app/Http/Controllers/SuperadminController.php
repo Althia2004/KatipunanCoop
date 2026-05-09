@@ -8,6 +8,7 @@ use App\Models\MemberRegistration;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Spatie\Activitylog\Models\Activity;
 
 class SuperadminController extends Controller
 {
@@ -59,7 +60,7 @@ class SuperadminController extends Controller
             ],
             'staff'           => $staff,
             'recentApprovals' => $pendingLoans->toBase()->concat($pendingRegs->toBase())->take(5)->values(),
-            'recentAudit' => \Spatie\Activitylog\Models\Activity::with('causer')
+            'recentAudit' => Activity::with('causer')
                 ->latest()
                 ->take(5)
                 ->get()
@@ -420,10 +421,10 @@ class SuperadminController extends Controller
         $totalCollections = \App\Models\LoanPayment::sum('amount_paid');
 
         // TODO: wire once Member model has savings_balance column
-        $totalSavings = 0;
+        $totalSavings = \App\Models\Member::whereIn('status', ['approved', 'active'])->sum('savings_balance');
 
         // TODO: wire once Member model has share_capital column
-        $totalCapitalShares = 0;
+        $totalCapitalShares = \App\Models\Member::whereIn('status', ['approved', 'active'])->sum('share_capital');
 
         // Monthly summary for selected year (only months with activity)
         $monthlySummary = collect(range(1, 12))->map(function ($month) use ($year) {

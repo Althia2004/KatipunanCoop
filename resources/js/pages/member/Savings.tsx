@@ -1,7 +1,8 @@
-import { Head } from '@inertiajs/react';
+import { Head, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
-import { PiggyBank, TrendingUp } from 'lucide-react';
+import { PiggyBank, TrendingUp, Plus, Minus, CheckCircle2 } from 'lucide-react';
 import MemberLayout from '@/layouts/MemberLayout';
+import * as savingsRoutes from '@/routes/member/savings';
 
 interface Transaction {
     id: number;
@@ -26,9 +27,121 @@ interface Props {
 const fmt = (n: number) =>
     '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+function DepositForm() {
+    const { data, setData, post, processing, errors, reset } = useForm({
+        amount: '',
+        remarks: '',
+    });
+
+    const submit = (e: React.FormEvent) => {
+        e.preventDefault();
+        post(savingsRoutes.deposit().url, {
+            onSuccess: () => {
+                reset();
+            },
+        });
+    };
+
+    return (
+        <form onSubmit={submit} className="space-y-3">
+            <div>
+                <label className="block text-xs font-medium text-zinc-700 mb-1">Amount</label>
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={data.amount}
+                    onChange={e => setData('amount', e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="0.00"
+                    required
+                />
+                {errors.amount && <p className="text-xs text-red-600 mt-1">{errors.amount}</p>}
+            </div>
+            <div>
+                <label className="block text-xs font-medium text-zinc-700 mb-1">Remarks (Optional)</label>
+                <input
+                    type="text"
+                    value={data.remarks}
+                    onChange={e => setData('remarks', e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="e.g., Monthly savings"
+                />
+                {errors.remarks && <p className="text-xs text-red-600 mt-1">{errors.remarks}</p>}
+            </div>
+            <button
+                type="submit"
+                disabled={processing}
+                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+                {processing ? 'Processing...' : 'Deposit'}
+            </button>
+        </form>
+    );
+}
+
+function WithdrawalForm({ savingsBalance }: { savingsBalance: number }) {
+    const { data, setData, post, processing, errors, reset } = useForm({
+        amount: '',
+        remarks: '',
+    });
+
+    const submit = (e: React.FormEvent) => {
+        e.preventDefault();
+        post(savingsRoutes.withdraw().url, {
+            onSuccess: () => {
+                reset();
+            },
+        });
+    };
+
+    const maxWithdrawal = Math.min(savingsBalance, 50000); // Reasonable daily limit
+
+    return (
+        <form onSubmit={submit} className="space-y-3">
+            <div>
+                <label className="block text-xs font-medium text-zinc-700 mb-1">Amount</label>
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max={maxWithdrawal}
+                    value={data.amount}
+                    onChange={e => setData('amount', e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="0.00"
+                    required
+                />
+                <p className="text-xs text-zinc-500 mt-1">Available: {fmt(savingsBalance)}</p>
+                {errors.amount && <p className="text-xs text-red-600 mt-1">{errors.amount}</p>}
+            </div>
+            <div>
+                <label className="block text-xs font-medium text-zinc-700 mb-1">Remarks (Optional)</label>
+                <input
+                    type="text"
+                    value={data.remarks}
+                    onChange={e => setData('remarks', e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="e.g., Emergency withdrawal"
+                />
+                {errors.remarks && <p className="text-xs text-red-600 mt-1">{errors.remarks}</p>}
+            </div>
+            <button
+                type="submit"
+                disabled={processing || parseFloat(data.amount) > savingsBalance}
+                className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+                {processing ? 'Processing...' : 'Withdraw'}
+            </button>
+        </form>
+    );
+}
+
 export default function MemberSavings({ user, member, savings_history, capital_history }: Props) {
     const [tab, setTab] = useState<'savings' | 'capital'>('savings');
     const list = tab === 'savings' ? savings_history : capital_history;
+    const { props } = usePage<{ flash?: { success?: string; error?: string } }>();
+    const flash = props.flash;
 
     return (
         <MemberLayout user={user} title="Savings">
@@ -39,6 +152,21 @@ export default function MemberSavings({ user, member, savings_history, capital_h
                     <h1 className="text-2xl font-bold text-zinc-900">Savings & Capital</h1>
                     <p className="text-zinc-500 text-sm mt-0.5">View your savings and capital share transactions.</p>
                 </div>
+
+                {/* Flash Messages */}
+                {flash?.success && (
+                    <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3 text-sm font-medium">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        {flash.success}
+                    </div>
+                )}
+
+                {flash?.error && (
+                    <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm font-medium">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        {flash.error}
+                    </div>
+                )}
 
                 {/* Balance cards */}
                 <div className="grid sm:grid-cols-2 gap-4">
@@ -59,6 +187,37 @@ export default function MemberSavings({ user, member, savings_history, capital_h
                             <p className="text-sm font-semibold text-zinc-600">Capital Share</p>
                         </div>
                         <p className="text-3xl font-black text-[#c8920a]">{fmt(member.share_capital)}</p>
+                    </div>
+                </div>
+
+                {/* Transaction Forms */}
+                <div className="grid sm:grid-cols-2 gap-4">
+                    {/* Deposit Form */}
+                    <div className="bg-white rounded-xl border border-zinc-100 shadow-sm p-5">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                                <Plus className="w-5 h-5 text-green-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-zinc-900">Deposit to Savings</p>
+                                <p className="text-xs text-zinc-500">Add money to your savings account</p>
+                            </div>
+                        </div>
+                        <DepositForm />
+                    </div>
+
+                    {/* Withdrawal Form */}
+                    <div className="bg-white rounded-xl border border-zinc-100 shadow-sm p-5">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+                                <Minus className="w-5 h-5 text-red-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-zinc-900">Withdraw from Savings</p>
+                                <p className="text-xs text-zinc-500">Withdraw money from your savings account</p>
+                            </div>
+                        </div>
+                        <WithdrawalForm savingsBalance={member.savings_balance} />
                     </div>
                 </div>
 

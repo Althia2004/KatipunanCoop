@@ -182,6 +182,69 @@ class MemberPortalController extends Controller
         ]);
     }
 
+    public function savingsDeposit(Request $request)
+    {
+        $validated = $request->validate([
+            'amount'  => 'required|numeric|min:0.01',
+            'remarks' => 'nullable|string|max:500',
+        ]);
+
+        $member = $this->getMember();
+        $newBalance = (float) ($member->savings_balance ?? 0) + (float) $validated['amount'];
+
+        \App\Models\SavingsTransaction::create([
+            'member_id'     => $member->id,
+            'type'          => 'deposit',
+            'amount'        => $validated['amount'],
+            'balance_after' => $newBalance,
+            'remarks'       => $validated['remarks'] ?? null,
+            'recorded_by'   => auth()->id(),
+        ]);
+
+        $member->update(['savings_balance' => $newBalance]);
+        app(\App\Services\MigsScoreService::class)->recalculate($member);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log("Member savings deposit: ₱{$validated['amount']}. New balance: ₱{$newBalance}");
+
+        return back()->with('success', 'Savings deposit recorded successfully.');
+    }
+
+    public function savingsWithdraw(Request $request)
+    {
+        $validated = $request->validate([
+            'amount'  => 'required|numeric|min:0.01',
+            'remarks' => 'nullable|string|max:500',
+        ]);
+
+        $member = $this->getMember();
+        $currentBalance = (float) ($member->savings_balance ?? 0);
+        if ((float) $validated['amount'] > $currentBalance) {
+            return back()->withErrors(['amount' => 'Withdrawal amount exceeds your savings balance.']);
+        }
+
+        $newBalance = $currentBalance - (float) $validated['amount'];
+
+        \App\Models\SavingsTransaction::create([
+            'member_id'     => $member->id,
+            'type'          => 'withdrawal',
+            'amount'        => $validated['amount'],
+            'balance_after' => $newBalance,
+            'remarks'       => $validated['remarks'] ?? null,
+            'recorded_by'   => auth()->id(),
+        ]);
+
+        $member->update(['savings_balance' => $newBalance]);
+        app(\App\Services\MigsScoreService::class)->recalculate($member);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log("Member savings withdrawal: ₱{$validated['amount']}. New balance: ₱{$newBalance}");
+
+        return back()->with('success', 'Savings withdrawal recorded successfully.');
+    }
+
     public function profile()
     {
         $user   = auth()->user();

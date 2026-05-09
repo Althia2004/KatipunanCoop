@@ -10,8 +10,8 @@ use App\Http\Controllers\MemberRegistrationController;
 use App\Http\Controllers\MemberController;
 use App\Http\Controllers\MemberAuthController;
 use App\Http\Controllers\MemberPortalController;
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\SuperadminController;
-use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
@@ -103,6 +103,8 @@ Route::prefix('member')
         Route::get('/dashboard',      [MemberPortalController::class, 'dashboard'])->name('member.dashboard');
         Route::get('/loans',          [MemberPortalController::class, 'loans'])->name('member.loans');
         Route::get('/savings',        [MemberPortalController::class, 'savings'])->name('member.savings');
+        Route::post('/savings/deposit', [MemberPortalController::class, 'savingsDeposit'])->name('member.savings.deposit');
+        Route::post('/savings/withdraw', [MemberPortalController::class, 'savingsWithdraw'])->name('member.savings.withdraw');
         Route::get('/profile',        [MemberPortalController::class, 'profile'])->name('member.profile');
         Route::get('/announcements',  [MemberPortalController::class, 'announcements'])->name('member.announcements');
         Route::get('/dividends',      [MemberPortalController::class, 'dividends'])->name('member.dividends');
@@ -113,13 +115,7 @@ Route::prefix('member')
 
 // ── Coming-Soon role-based dashboard placeholders ──
 Route::middleware(['auth'])->group(function () {
-    Route::get('/admin/dashboard', function () {
-        $user = auth()->user();
-        if (!$user) return redirect('/login');
-        $team = $user->currentTeam ?? $user->personalTeam();
-        if ($team) return redirect('/' . $team->slug . '/dashboard');
-        return redirect('/login');
-    })->name('admin.dashboard');
+    Route::get('/admin/dashboard', [AdminController::class, 'dashboard'])->name('admin.dashboard');
     Route::inertia('/manager/dashboard',    'ComingSoon', ['page' => 'Manager Dashboard'])->name('manager.dashboard');
     Route::inertia('/board/dashboard',      'ComingSoon', ['page' => 'Board of Directors Dashboard'])->name('board.dashboard');
     Route::inertia('/bookkeeper/dashboard', 'ComingSoon', ['page' => 'Bookkeeper Dashboard'])->name('bookkeeper.dashboard');
