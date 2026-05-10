@@ -1,4 +1,4 @@
-import { Banknote, Calendar } from 'lucide-react';
+import { Banknote, Calendar, OctagonX } from 'lucide-react'; // Added OctagonX for rejection style
 import { router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { LoanRequest } from '@/types/loan-request';
@@ -31,7 +31,16 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
     // --- HANDLERS ---
     const handleViewRequest = (request: LoanRequest) => {
         setActiveRequest(request);
-        setEditedInterestRate(request.interest_rate); // Initialize with DB value
+        setEditedInterestRate(request.interest_rate);
+    };
+
+    const handleReject = (id: number) => {
+        if (confirm('Are you sure you want to reject this loan request? This action cannot be undone.')) {
+            router.patch(`/loan/request/${id}/reject`, {}, {
+                preserveScroll: true,
+                onSuccess: () => setActiveRequest(null),
+            });
+        }
     };
 
     const formatPHP = (amount: number | string) => {
@@ -54,6 +63,7 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
         switch (status) {
             case 'approved': return 'bg-emerald-100 text-emerald-700';
             case 'for_bod_approval': return 'bg-blue-100 text-blue-700';
+            case 'rejected': return 'bg-red-100 text-red-700'; // Added rejection color
             default: return 'bg-amber-100 text-amber-700';
         }
     };
@@ -134,6 +144,14 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
                         </div>
 
                         <div className="p-6 space-y-6">
+                            {/* Rejected State Banner */}
+                            {activeRequest.status === 'rejected' && (
+                                <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-700">
+                                    <OctagonX className="w-5 h-5" />
+                                    <p className="text-sm font-bold uppercase tracking-wider">This request has been rejected.</p>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
                                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Amount</p>
@@ -145,45 +163,45 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
                                 </div>
                             </div>
 
-                            {/* Status Stepper */}
-                            <div className="rounded-3xl border border-zinc-200 bg-white p-6">
-                                <div className="flex items-center justify-between gap-4 mb-6">
-                                    <p className="text-sm font-bold text-zinc-900">Approval Journey</p>
-                                    <span className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-[0.24em] ${badgeClass(activeRequest.status)}`}>
-                                        {activeRequest.status.replace(/_/g, ' ')}
-                                    </span>
-                                </div>
-                                <div className="relative">
-                                    <div className="absolute inset-x-0 top-5 h-0.5 bg-zinc-200" />
-                                    <div 
-                                        className="absolute left-0 top-5 h-0.5 bg-emerald-600 transition-all" 
-                                        style={{ width: `${(LOAN_STATUS_STEPS.findIndex(s => s.status === activeRequest.status) / (LOAN_STATUS_STEPS.length - 1)) * 100}%` }}
-                                    />
-                                    <div className="relative flex justify-between">
-                                        {LOAN_STATUS_STEPS.map((step, idx) => {
-                                            const activeIdx = LOAN_STATUS_STEPS.findIndex(s => s.status === activeRequest.status);
-                                            const done = idx <= activeIdx;
-                                            return (
-                                                <div key={step.status} className="flex flex-col items-center">
-                                                    <div className={`z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 transition ${done ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-zinc-200 text-zinc-400'}`}>
-                                                        {done ? '✓' : idx + 1}
+                            {/* Status Stepper - Only show if not rejected */}
+                            {activeRequest.status !== 'rejected' && (
+                                <div className="rounded-3xl border border-zinc-200 bg-white p-6">
+                                    <div className="flex items-center justify-between gap-4 mb-6">
+                                        <p className="text-sm font-bold text-zinc-900">Approval Journey</p>
+                                        <span className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-[0.24em] ${badgeClass(activeRequest.status)}`}>
+                                            {activeRequest.status.replace(/_/g, ' ')}
+                                        </span>
+                                    </div>
+                                    <div className="relative">
+                                        <div className="absolute inset-x-0 top-5 h-0.5 bg-zinc-200" />
+                                        <div 
+                                            className="absolute left-0 top-5 h-0.5 bg-emerald-600 transition-all" 
+                                            style={{ width: `${(LOAN_STATUS_STEPS.findIndex(s => s.status === activeRequest.status) / (LOAN_STATUS_STEPS.length - 1)) * 100}%` }}
+                                        />
+                                        <div className="relative flex justify-between">
+                                            {LOAN_STATUS_STEPS.map((step, idx) => {
+                                                const activeIdx = LOAN_STATUS_STEPS.findIndex(s => s.status === activeRequest.status);
+                                                const done = idx <= activeIdx;
+                                                return (
+                                                    <div key={step.status} className="flex flex-col items-center">
+                                                        <div className={`z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 transition ${done ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white border-zinc-200 text-zinc-400'}`}>
+                                                            {done ? '✓' : idx + 1}
+                                                        </div>
+                                                        <p className={`mt-2 text-xs font-bold ${done ? 'text-zinc-900' : 'text-zinc-400'}`}>{step.label}</p>
                                                     </div>
-                                                    <p className={`mt-2 text-xs font-bold ${done ? 'text-zinc-900' : 'text-zinc-400'}`}>{step.label}</p>
-                                                </div>
-                                            );
-                                        })}
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
 
-                            {/* Details Grid */}
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
                                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Term (Months)</p>
                                     <p className="mt-3 text-xl font-semibold text-zinc-900">{activeRequest.term_months} Months</p>
                                 </div>
                                 
-                                {/* INTEREST RATE: Editable for Superadmin, Static for others */}
                                 <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
                                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Interest Rate</p>
                                     {isSuperadmin && activeRequest.status === 'pending' ? (
@@ -209,18 +227,29 @@ export default function LoanRequestTable({ loanRequests }: LoanRequestTableProps
                             </div>
 
                             {/* Footer Actions */}
-                            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end border-t border-zinc-100 pt-6">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center border-t border-zinc-100 pt-6">
+                                {/* Only Superadmin sees Reject button for Pending or BOD Approval requests */}
+                                {isSuperadmin && (activeRequest.status === 'pending' || activeRequest.status === 'for_bod_approval') && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleReject(activeRequest.id)}
+                                        className="mr-auto px-6 py-3 text-sm font-bold text-red-600 hover:bg-red-50 rounded-xl transition"
+                                    >
+                                        Reject Request
+                                    </button>
+                                )}
+                                
                                 <button
                                     onClick={() => setActiveRequest(null)}
                                     className="px-6 py-3 text-sm font-bold text-zinc-500 hover:text-zinc-700 transition"
                                 >
                                     Cancel
                                 </button>
+
                                 {isSuperadmin && activeRequest.status === 'pending' && (
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            const approvedMode = Number(activeRequest.amount) <= 50000;
                                             router.patch(
                                                 `/loan/request/${activeRequest.id}/approve`,
                                                 { interest_rate: editedInterestRate },

@@ -59,6 +59,9 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/loan/request/{loanRequest}/approve', [LoanManagementController::class, 'approve'])
         ->name('loan.request.approve');
 
+    Route::patch('/loan/request/{loanRequest}/reject', [LoanManagementController::class, 'reject'])
+        ->name('loan.request.reject');
+
     Route::get('/loan/active', [LoanManagementController::class, 'active'])
         ->name('loan.active');
 

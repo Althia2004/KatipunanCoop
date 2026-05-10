@@ -80,6 +80,23 @@ class LoanManagementController extends Controller
         return redirect()->route('loan.management');
     }
 
+    public function reject(LoanRequest $loanRequest, Request $request)
+    {
+        abort_unless($request->user()?->isSuperadmin(), 403);
+        
+        abort_unless(in_array($loanRequest->status, [
+            LoanRequest::STATUS_PENDING, 
+            LoanRequest::STATUS_FOR_BOD_APPROVAL
+        ]), 403);
+
+        $loanRequest->update([
+            'status' => 'rejected',
+        ]);
+
+        return redirect()->route('loan.management');
+    }
+
+
     public function active(): Response
     {
         $user = request()->user();
