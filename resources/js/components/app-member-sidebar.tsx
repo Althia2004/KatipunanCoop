@@ -1,5 +1,12 @@
+// resources/js/components/app-member-sidebar.tsx
+
 import { Link } from '@inertiajs/react';
-import { Banknote, BookOpen, FolderGit2 } from 'lucide-react';
+import { 
+    Banknote, 
+    BookOpen, 
+    FolderGit2, 
+    PiggyBank // Added icon for Share Capital
+} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -18,10 +25,20 @@ import type { NavItem } from '@/types';
 export function AppMemberSidebar() {
     const dashboardUrl = '/member/dashboard';
 
+    const featureNavItems: NavItem[] = [
+        {
+            title: 'Capital Shares',
+            href: '/member/capital-shares',
+            icon: PiggyBank,
+        },
+    ];
+
+
     const loanNavItems: NavItem[] = [
         {
             title: 'Loan Request',
             href: '/loan/management',
+            icon: Banknote,
         },
     ];
 
@@ -56,7 +73,7 @@ export function AppMemberSidebar() {
 
             <SidebarContent>
                 <NavMain
-                    featureItems={[]}
+                    featureItems={featureNavItems}
                     loanItems={loanNavItems}
                     userItems={userNavItems}
                 />

@@ -55,4 +55,9 @@ class User extends Authenticatable
 
         return 'member.dashboard';
     }
+
+    public function shareAccount()
+    {
+        return $this->hasOne(ShareAccount::class);
+    }
 }

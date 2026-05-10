@@ -98,6 +98,12 @@ Route::middleware(['auth'])->group(function () {
     Route::inertia('/user/member-management', 'User/MemberManagement')
         ->name('user.member-management');
 
+    Route::get('/member/capital-shares', [App\Http\Controllers\ShareAccountController::class, 'index'])
+        ->name('member.shares');
+
+    Route::post('/member/capital-shares', [App\Http\Controllers\ShareAccountController::class, 'store'])
+        ->name('member.shares.store');
+    
     Route::inertia('/user/amortization', 'User/Amortization')
         ->name('user.amortization');
 
