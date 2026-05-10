@@ -12,6 +12,7 @@ use App\Http\Controllers\MemberAuthController;
 use App\Http\Controllers\MemberPortalController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\SuperadminController;
+use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;

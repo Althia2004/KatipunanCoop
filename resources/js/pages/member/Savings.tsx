@@ -33,7 +33,7 @@ function DepositForm() {
         remarks: '',
     });
 
-    const submit = (e: React.FormEvent) => {
+    const submit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         post(savingsRoutes.deposit().url, {
             onSuccess: () => {
@@ -43,10 +43,11 @@ function DepositForm() {
     };
 
     return (
-        <form onSubmit={submit} className="space-y-3">
+        <form onSubmit={submit} action={savingsRoutes.deposit().url} method="post" className="space-y-3">
             <div>
                 <label className="block text-xs font-medium text-zinc-700 mb-1">Amount</label>
                 <input
+                    name="amount"
                     type="number"
                     step="0.01"
                     min="0.01"
@@ -98,10 +99,11 @@ function WithdrawalForm({ savingsBalance }: { savingsBalance: number }) {
     const maxWithdrawal = Math.min(savingsBalance, 50000); // Reasonable daily limit
 
     return (
-        <form onSubmit={submit} className="space-y-3">
+        <form onSubmit={submit} action={savingsRoutes.withdraw().url} method="post" className="space-y-3">
             <div>
                 <label className="block text-xs font-medium text-zinc-700 mb-1">Amount</label>
                 <input
+                    name="amount"
                     type="number"
                     step="0.01"
                     min="0.01"
@@ -118,6 +120,7 @@ function WithdrawalForm({ savingsBalance }: { savingsBalance: number }) {
             <div>
                 <label className="block text-xs font-medium text-zinc-700 mb-1">Remarks (Optional)</label>
                 <input
+                    name="remarks"
                     type="text"
                     value={data.remarks}
                     onChange={e => setData('remarks', e.target.value)}
