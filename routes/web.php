@@ -1,16 +1,16 @@
 <?php
 
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AnnualReportsController;
+use App\Http\Controllers\BeneficiaryController;
+use App\Http\Controllers\CopraSaleController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LoanManagementController;
 use App\Http\Controllers\LoanRequestController;
-use App\Http\Controllers\SeminarController;
-use App\Http\Controllers\AnnualReportsController;
-use App\Http\Controllers\BeneficiaryController;
-use App\Http\Controllers\MemberRegistrationController;
-use App\Http\Controllers\MemberController;
 use App\Http\Controllers\MemberAuthController;
+use App\Http\Controllers\MemberController;
 use App\Http\Controllers\MemberPortalController;
-use App\Http\Controllers\AdminController;
+use App\Http\Controllers\MemberRegistrationController;
 use App\Http\Controllers\SuperadminController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
@@ -80,9 +80,11 @@ Route::prefix('superadmin')
         Route::patch('/announcements/{announcement}/toggle', [SuperadminController::class, 'toggleAnnouncement'])->name('superadmin.announcements.toggle');
 
         // Copra Sales
-        Route::get('/copra-sales', [SuperadminController::class, 'coproSales'])->name('superadmin.copra-sales');
-        Route::post('/copra-sales/{member}', [SuperadminController::class, 'storeCoproSale'])->name('superadmin.copra-sales.store');
-        Route::delete('/copra-sales/{copraSale}', [SuperadminController::class, 'deleteCoproSale'])->name('superadmin.copra-sales.delete');
+        Route::get('/copra-sales', [CopraSaleController::class, 'index'])->name('superadmin.copra-sales');
+        Route::post('/copra-sales/{member}', [CopraSaleController::class, 'store'])->name('superadmin.copra-sales.store');
+        Route::put('/copra-sales/{copraSale}', [CopraSaleController::class, 'update'])->name('superadmin.copra-sales.update');
+        Route::delete('/copra-sales/{copraSale}', [CopraSaleController::class, 'destroy'])->name('superadmin.copra-sales.delete');
+        Route::get('/copra-sales/report', [CopraSaleController::class, 'generateReport'])->name('superadmin.copra-sales.report');
 
         // Savings & Capital
         Route::get('/savings', [SuperadminController::class, 'savingsOverview'])->name('superadmin.savings');
@@ -109,6 +111,7 @@ Route::prefix('member')
         Route::get('/profile',        [MemberPortalController::class, 'profile'])->name('member.profile');
         Route::get('/announcements',  [MemberPortalController::class, 'announcements'])->name('member.announcements');
         Route::get('/dividends',      [MemberPortalController::class, 'dividends'])->name('member.dividends');
+        Route::get('/copra-sales/history', [CopraSaleController::class, 'memberSales'])->name('member.copra-sales.history');
         Route::get('/settings',       [MemberPortalController::class, 'settings'])->name('member.settings');
         Route::put('/settings/password', [MemberPortalController::class, 'updatePassword'])->name('member.settings.password');
         Route::put('/settings/contact',  [MemberPortalController::class, 'updateContact'])->name('member.settings.contact');
