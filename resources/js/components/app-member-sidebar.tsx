@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { Banknote, BookOpen, FolderGit2 } from 'lucide-react';
+import { Banknote, BookOpen, FolderGit2, CreditCard, PiggyBank, Megaphone, TrendingUp, User, Settings } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -18,14 +18,49 @@ import type { NavItem } from '@/types';
 export function AppMemberSidebar() {
     const dashboardUrl = '/member/dashboard';
 
-    const loanNavItems: NavItem[] = [
+    const featureNavItems: NavItem[] = [
         {
-            title: 'Loan Request',
-            href: '/loan/management',
+            title: 'Announcements',
+            href: '/member/announcements',
+            icon: Megaphone,
         },
     ];
 
-    const userNavItems: NavItem[] = [];
+    const loanNavItems: NavItem[] = [
+        {
+            title: 'My Loans',
+            href: '/member/loans',
+            icon: Banknote,
+        },
+        {
+            title: 'My Payments',
+            href: '/member/payments',
+            icon: CreditCard,
+        },
+    ];
+
+    const userNavItems: NavItem[] = [
+        {
+            title: 'Savings & Capital',
+            href: '/member/savings',
+            icon: PiggyBank,
+        },
+        {
+            title: 'Dividends',
+            href: '/member/dividends',
+            icon: TrendingUp,
+        },
+        {
+            title: 'My Profile',
+            href: '/member/profile',
+            icon: User,
+        },
+        {
+            title: 'Settings',
+            href: '/member/settings',
+            icon: Settings,
+        },
+    ];
 
     const footerNavItems: NavItem[] = [
         {
@@ -56,7 +91,7 @@ export function AppMemberSidebar() {
 
             <SidebarContent>
                 <NavMain
-                    featureItems={[]}
+                    featureItems={featureNavItems}
                     loanItems={loanNavItems}
                     userItems={userNavItems}
                 />

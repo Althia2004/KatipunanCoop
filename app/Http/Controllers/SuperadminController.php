@@ -46,6 +46,41 @@ class SuperadminController extends Controller
                 'priority'    => 'low',
             ]);
 
+        $totalSavings   = (float) \App\Models\Member::whereIn('status', ['approved', 'active'])->sum('savings_balance');
+        $totalCapital   = (float) \App\Models\Member::whereIn('status', ['approved', 'active'])->sum('share_capital');
+        $annualRate     = 0.03;
+        $monthlyInterest = round($totalSavings * ($annualRate / 12), 2);
+
+        $monthlySavingsSummary = collect(range(1, 12))->map(function ($month) {
+            $year = now()->year;
+            $deposits    = \App\Models\SavingsTransaction::whereYear('created_at', $year)
+                ->whereMonth('created_at', $month)
+                ->whereIn('type', ['deposit', 'credit'])
+                ->sum('amount');
+            $withdrawals = \App\Models\SavingsTransaction::whereYear('created_at', $year)
+                ->whereMonth('created_at', $month)
+                ->whereIn('type', ['withdrawal', 'debit'])
+                ->sum('amount');
+            return [
+                'month'       => \Carbon\Carbon::create($year, $month)->format('M'),
+                'deposits'    => (float) $deposits,
+                'withdrawals' => (float) $withdrawals,
+                'net'         => (float) $deposits - (float) $withdrawals,
+            ];
+        })->values();
+
+        $recentSavings = \App\Models\SavingsTransaction::with('member:id,name')
+            ->latest()
+            ->take(10)
+            ->get()
+            ->map(fn ($t) => [
+                'id'          => $t->id,
+                'member_name' => $t->member?->name ?? '—',
+                'type'        => $t->type,
+                'amount'      => (float) $t->amount,
+                'created_at'  => $t->created_at->format('M d, Y'),
+            ]);
+
         return inertia('Superadmin/Dashboard', [
             'stats' => [
                 'totalMembers'     => User::where('role', 'member')->count(),
@@ -56,7 +91,12 @@ class SuperadminController extends Controller
                     ])->count(),
                 'activeStaff'      => $staff->count(),
                 'systemAlerts'     => 0,
+                'totalSavings'     => $totalSavings,
+                'totalCapital'     => $totalCapital,
+                'monthlyInterest'  => $monthlyInterest,
             ],
+            'monthlySavingsSummary' => $monthlySavingsSummary,
+            'recentSavings'         => $recentSavings,
             'staff'           => $staff,
             'recentApprovals' => $pendingLoans->toBase()->concat($pendingRegs->toBase())->take(5)->values(),
             'recentAudit' => \Spatie\Activitylog\Models\Activity::with('causer')
@@ -419,11 +459,8 @@ class SuperadminController extends Controller
         // Total collections (all loan payments received)
         $totalCollections = \App\Models\LoanPayment::sum('amount_paid');
 
-        // TODO: wire once Member model has savings_balance column
-        $totalSavings = 0;
-
-        // TODO: wire once Member model has share_capital column
-        $totalCapitalShares = 0;
+        $totalSavings       = (float) \App\Models\Member::whereIn('status', ['approved', 'active'])->sum('savings_balance');
+        $totalCapitalShares = (float) \App\Models\Member::whereIn('status', ['approved', 'active'])->sum('share_capital');
 
         // Monthly summary for selected year (only months with activity)
         $monthlySummary = collect(range(1, 12))->map(function ($month) use ($year) {

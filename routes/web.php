@@ -10,6 +10,7 @@ use App\Http\Controllers\MemberRegistrationController;
 use App\Http\Controllers\MemberController;
 use App\Http\Controllers\MemberAuthController;
 use App\Http\Controllers\MemberPortalController;
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\SuperadminController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
@@ -33,6 +34,30 @@ Route::get('/', function () {
             ]),
     ]);
 })->name('home');
+
+// ── Member Auth (guest) — MUST be before {current_team} wildcard ──
+Route::get('/member/login', fn () => inertia('member/login'))->name('member.login');
+Route::post('/member/login', [MemberAuthController::class, 'login'])->name('member.login.post');
+Route::post('/member/logout', [MemberAuthController::class, 'logout'])->name('member.logout');
+
+// ── Member Portal (protected) — MUST be before {current_team} wildcard ──
+Route::prefix('member')
+    ->middleware(['auth', 'member'])
+    ->group(function () {
+        Route::get('/dashboard',     [MemberPortalController::class, 'dashboard'])->name('member.dashboard');
+        Route::get('/loans',         [MemberPortalController::class, 'loans'])->name('member.loans');
+        Route::get('/payments',      [MemberPortalController::class, 'payments'])->name('member.payments');
+        Route::post('/payments',     [MemberPortalController::class, 'storePayment'])->name('member.payments.store');
+        Route::get('/savings',       [MemberPortalController::class, 'savings'])->name('member.savings');
+        Route::post('/savings/deposit',  [MemberPortalController::class, 'savingsDeposit'])->name('member.savings.deposit');
+        Route::post('/savings/withdraw', [MemberPortalController::class, 'savingsWithdraw'])->name('member.savings.withdraw');
+        Route::get('/profile',       [MemberPortalController::class, 'profile'])->name('member.profile');
+        Route::get('/announcements', [MemberPortalController::class, 'announcements'])->name('member.announcements');
+        Route::get('/dividends',     [MemberPortalController::class, 'dividends'])->name('member.dividends');
+        Route::get('/settings',      [MemberPortalController::class, 'settings'])->name('member.settings');
+        Route::put('/settings/password', [MemberPortalController::class, 'updatePassword'])->name('member.settings.password');
+        Route::put('/settings/contact',  [MemberPortalController::class, 'updateContact'])->name('member.settings.contact');
+    });
 
 // ── Superadmin ──
 Route::prefix('superadmin')
@@ -70,8 +95,11 @@ Route::prefix('superadmin')
         Route::get('/loan-requests', [SuperadminController::class, 'loanRequests'])->name('superadmin.loan-requests');
         Route::post('/loan-requests/{loanRequest}/approve', [SuperadminController::class, 'approveLoanRequest'])->name('superadmin.loan-requests.approve');
         Route::post('/loan-requests/{loanRequest}/reject',  [SuperadminController::class, 'rejectLoanRequest'])->name('superadmin.loan-requests.reject');
+
         Route::inertia('/pending-approvals', 'Superadmin/PendingApprovals/PendingApprovalsPanel')
             ->name('superadmin.pending-approvals');
+
+        // Announcements
         Route::get('/announcements', [SuperadminController::class, 'announcements'])->name('superadmin.announcements');
         Route::post('/announcements', [SuperadminController::class, 'storeAnnouncement'])->name('superadmin.announcements.store');
         Route::put('/announcements/{announcement}', [SuperadminController::class, 'updateAnnouncement'])->name('superadmin.announcements.update');
@@ -89,49 +117,43 @@ Route::prefix('superadmin')
         Route::post('/savings/{member}/withdraw', [SuperadminController::class, 'savingsWithdraw'])->name('superadmin.savings.withdraw');
         Route::post('/savings/{member}/capital-adjust', [SuperadminController::class, 'capitalAdjust'])->name('superadmin.savings.capital-adjust');
         Route::get('/savings/{member}/history', [SuperadminController::class, 'savingsHistory'])->name('superadmin.savings.history');
+
+        // Superadmin Payment Dashboard
+        Route::get('/payments', [SuperadminController::class, 'payments'])->name('superadmin.payments');
+        Route::post('/payments/capital-share', [SuperadminController::class, 'recordCapitalSharePayment'])->name('superadmin.payments.capital-share');
+        Route::post('/payments', [SuperadminController::class, 'recordPayment'])->name('superadmin.payments.store');
+        Route::put('/payments/{payment}', [SuperadminController::class, 'updatePayment'])->name('superadmin.payments.update');
+        Route::get('/payments/{id}/receipt', [SuperadminController::class, 'downloadReceipt'])->name('superadmin.payments.receipt');
     });
 
-// ── Member Auth (guest) ──
-Route::get('/member/login', fn () => inertia('member/login'))->name('member.login');
-Route::post('/member/login', [MemberAuthController::class, 'login'])->name('member.login.post');
-Route::post('/member/logout', [MemberAuthController::class, 'logout'])->name('member.logout');
-
-// ── Member Portal (protected) ──
-Route::prefix('member')
-    ->middleware(['auth', 'member'])
-    ->group(function () {
-        Route::get('/dashboard',      [MemberPortalController::class, 'dashboard'])->name('member.dashboard');
-        Route::get('/loans',          [MemberPortalController::class, 'loans'])->name('member.loans');
-        Route::get('/savings',        [MemberPortalController::class, 'savings'])->name('member.savings');
-        Route::get('/profile',        [MemberPortalController::class, 'profile'])->name('member.profile');
-        Route::get('/announcements',  [MemberPortalController::class, 'announcements'])->name('member.announcements');
-        Route::get('/dividends',      [MemberPortalController::class, 'dividends'])->name('member.dividends');
-        Route::get('/settings',       [MemberPortalController::class, 'settings'])->name('member.settings');
-        Route::put('/settings/password', [MemberPortalController::class, 'updatePassword'])->name('member.settings.password');
-        Route::put('/settings/contact',  [MemberPortalController::class, 'updateContact'])->name('member.settings.contact');
-    });
-
-// ── Coming-Soon role-based dashboard placeholders ──
+// ── Role-based dashboard redirects ──
 Route::middleware(['auth'])->group(function () {
     Route::get('/admin/dashboard', function () {
         $user = auth()->user();
         if (!$user) return redirect('/login');
         $team = $user->currentTeam ?? $user->personalTeam();
+        if (!$team) {
+            $team = $user->teams()->first();
+            if ($team) $user->update(['current_team_id' => $team->id]);
+        }
         if ($team) return redirect('/' . $team->slug . '/dashboard');
         return redirect('/login');
     })->name('admin.dashboard');
+
     Route::inertia('/manager/dashboard',    'ComingSoon', ['page' => 'Manager Dashboard'])->name('manager.dashboard');
     Route::inertia('/board/dashboard',      'ComingSoon', ['page' => 'Board of Directors Dashboard'])->name('board.dashboard');
     Route::inertia('/bookkeeper/dashboard', 'ComingSoon', ['page' => 'Bookkeeper Dashboard'])->name('bookkeeper.dashboard');
     Route::inertia('/hr/dashboard',         'ComingSoon', ['page' => 'HR Manager Dashboard'])->name('hr.dashboard');
 });
 
+// ── Team-based Admin Dashboard — MUST be AFTER all specific routes ──
 Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
         Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     });
 
+// ── Auth protected routes ──
 Route::middleware(['auth'])->group(function () {
     Route::get('invitations/{invitation}/accept', [TeamInvitationController::class, 'accept'])
         ->name('invitations.accept');
@@ -149,10 +171,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/loan/seminar-tracking', [SeminarController::class, 'index'])
         ->name('loan.seminar-tracking');
-
     Route::get('/loan/seminar-tracking/create', [SeminarController::class, 'create'])
         ->name('loan.seminar-tracking.create');
-
     Route::post('loan/seminar-tracking', [SeminarController::class, 'store'])
         ->name('loan.seminar-tracking.store');
 
@@ -160,24 +180,22 @@ Route::middleware(['auth'])->group(function () {
         ->name('loan.management');
 
     // Loan Request Actions (Admin)
+    Route::post('/loan/loan-requests/store',                  [LoanRequestController::class, 'store'])->name('loan-requests.store');
     Route::post('/loan/loan-requests/{loanRequest}/approve',  [LoanRequestController::class, 'approve'])->name('loan-requests.approve');
     Route::post('/loan/loan-requests/{loanRequest}/reject',   [LoanRequestController::class, 'reject'])->name('loan-requests.reject');
     Route::post('/loan/loan-requests/{loanRequest}/escalate', [LoanRequestController::class, 'escalate'])->name('loan-requests.escalate');
-    Route::post('/loan/loan-requests/store',                  [LoanRequestController::class, 'store'])->name('loan-requests.store');
+    Route::get('/loan/loan-requests/eligibility/{member}',    [LoanRequestController::class, 'checkEligibility'])->name('loan-requests.eligibility');
 
     Route::patch('/loan/request/{loanRequest}/approve', [LoanManagementController::class, 'approve'])
         ->name('loan.request.approve');
-
     Route::get('/loan/active', [LoanManagementController::class, 'active'])
         ->name('loan.active');
-
     Route::post('/loan/request', [LoanManagementController::class, 'store'])
         ->name('loan.request.store');
-
     Route::inertia('/loan/request', 'Loan/Request')
         ->name('loan.request');
 
-    // --- Member Registration ---
+    // Member Registration
     Route::get('/loan/member-registration', [MemberRegistrationController::class, 'index'])
         ->name('loan.member-registration');
     Route::get('/loan/member-registration/create', [MemberRegistrationController::class, 'create'])
@@ -193,7 +211,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/loan/member-registration/{memberRegistration}/assign-account', [MemberRegistrationController::class, 'assignAccount'])
         ->name('loan.member-registration.assign-account');
 
-    // --- Beneficiaries (staff only) ---
+    // Beneficiaries
     Route::post('/loan/member-registration/{memberRegistration}/beneficiaries', [BeneficiaryController::class, 'store'])
         ->name('loan.member-registration.beneficiaries.store');
     Route::patch('/loan/member-registration/{memberRegistration}/beneficiaries/{beneficiary}', [BeneficiaryController::class, 'update'])
@@ -201,6 +219,7 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/loan/member-registration/{memberRegistration}/beneficiaries/{beneficiary}', [BeneficiaryController::class, 'destroy'])
         ->name('loan.member-registration.beneficiaries.destroy');
 
+    // Member Management
     Route::get('/user/member-management', [MemberController::class, 'memberManagement'])
         ->name('user.member-management');
     Route::patch('/user/member-management/{member}', [MemberController::class, 'updateMember'])
@@ -210,21 +229,25 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('/user/member-management/{member}/request-deletion', [MemberController::class, 'requestDeletion'])
         ->name('user.member-management.request-deletion');
 
+    // Amortization
     Route::get('/user/amortization', [MemberController::class, 'amortization'])
         ->name('user.amortization');
     Route::get('/user/amortization/download', [MemberController::class, 'downloadAmortization'])
         ->name('user.amortization.download');
 
+    // Savings Interest
     Route::get('/user/savings-interest', [MemberController::class, 'savingsInterest'])
         ->name('user.savings-interest');
     Route::get('/user/savings-interest/download', [MemberController::class, 'downloadSavingsInterest'])
         ->name('user.savings-interest.download');
 
+    // Dividend Reports
     Route::get('/user/dividend-reports', [MemberController::class, 'dividendReports'])
         ->name('user.dividend-reports');
     Route::get('/user/dividend-reports/download', [MemberController::class, 'downloadDividendReports'])
         ->name('user.dividend-reports.download');
 
+    // Patronage Reports
     Route::get('/user/patronage-reports', [MemberController::class, 'patronageReports'])
         ->name('user.patronage-reports');
     Route::post('/user/patronage-reports/request-release', [MemberController::class, 'requestPatronageRelease'])
@@ -232,17 +255,20 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/user/patronage-reports/download', [MemberController::class, 'downloadPatronage'])
         ->name('user.patronage-reports.download');
 
-    Route::get('/user/payments', [MemberController::class, 'payments'])
-        ->name('user.payments');
-    Route::post('/user/payments', [MemberController::class, 'recordPayment'])
-        ->name('user.payments.store');
-    Route::put('/user/payments/{payment}', [MemberController::class, 'updatePayment'])
-        ->name('user.payments.update');
-    Route::get('/user/payments/{payment}/receipt', [MemberController::class, 'downloadReceipt'])
-        ->name('user.payments.receipt');
+    // ── Unified Payment Dashboard (Admin/Staff) ──
+    Route::get('/user/payments', [LoanManagementController::class, 'paymentDashboard'])
+        ->name('payments.index');
+    Route::post('/user/payments', [LoanManagementController::class, 'storePayment'])
+        ->name('payments.store');
+    Route::post('/user/payments/capital-share', [LoanManagementController::class, 'storeCapitalShare'])
+        ->name('payments.capital-share');
+    Route::put('/user/payments/{payment}', [LoanManagementController::class, 'updatePayment'])
+        ->name('payments.update');
+    Route::get('/user/payments/{payment}/receipt', [LoanManagementController::class, 'downloadReceipt'])
+        ->name('payments.receipt');
 });
 
-// --- API Routes: Member Management ---
+// API Routes
 Route::prefix('api')->middleware(['auth'])->group(function () {
     Route::get('/members', [MemberController::class, 'index'])
         ->name('api.members.index');
