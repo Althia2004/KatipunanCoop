@@ -46,6 +46,7 @@ Route::prefix('member')
     ->group(function () {
         Route::get('/dashboard',     [MemberPortalController::class, 'dashboard'])->name('member.dashboard');
         Route::get('/loans',         [MemberPortalController::class, 'loans'])->name('member.loans');
+        Route::post('/loan-requests/store', [MemberPortalController::class, 'storeLoanRequest'])->name('member.loan-requests.store');
         Route::get('/payments',      [MemberPortalController::class, 'payments'])->name('member.payments');
         Route::post('/payments',     [MemberPortalController::class, 'storePayment'])->name('member.payments.store');
         Route::get('/savings',       [MemberPortalController::class, 'savings'])->name('member.savings');

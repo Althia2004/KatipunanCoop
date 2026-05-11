@@ -44,11 +44,11 @@ class LoanEligibilityService
         }
 
         // 3. No active loan check — query directly instead of relationship
-        $hasActiveLoan = \App\Models\Loan::where('member_id', $member->id)
+        $hasActiveLoan = \App\Models\Loan::where('member_id', $member->user_id)
             ->whereIn('status', ['active', 'approved'])
             ->exists();
 
-        $hasPendingRequest = \App\Models\LoanRequest::where('member_id', $member->id)
+        $hasPendingRequest = \App\Models\LoanRequest::where('requested_by', $member->user_id)
             ->whereIn('status', ['pending', 'for_bod_approval'])
             ->exists();
 

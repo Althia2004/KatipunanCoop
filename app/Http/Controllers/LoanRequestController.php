@@ -15,6 +15,10 @@ class LoanRequestController extends Controller
      */
     public function approve(Request $request, LoanRequest $loanRequest)
     {
+        if ($loanRequest->status === 'approved') {
+            return back()->withErrors(['error' => 'This request has already been approved.']);
+        }    
+
         $managerLimit = 50000;
 
         if ($loanRequest->amount > $managerLimit) {
@@ -178,33 +182,35 @@ class LoanRequestController extends Controller
         $termMonths  = (int) ($loan->term_months ?? 12);
 
         if ($monthlyRate > 0) {
-            $monthlyPayment = $principal * ($monthlyRate * pow(1 + $monthlyRate, $termMonths))
-                / (pow(1 + $monthlyRate, $termMonths) - 1);
+            $monthlyPayment = $principal * ($monthlyRate * pow(1 + $monthlyRate, $termMonths)) 
+                            / (pow(1 + $monthlyRate, $termMonths) - 1);
         } else {
             $monthlyPayment = $principal / $termMonths;
         }
 
-        $balance   = $principal;
+        $balance = $principal;
         $startDate = now()->addMonth();
 
         for ($i = 1; $i <= $termMonths; $i++) {
             $interestPart  = round($balance * $monthlyRate, 2);
-            $principalPart = round($monthlyPayment - $interestPart, 2);
-
-            // Last payment: clear remaining balance to avoid rounding drift
+            
             if ($i === $termMonths) {
+                // Last month: Use the remaining balance to zero it out
                 $principalPart = $balance;
+            } else {
+                $principalPart = round($monthlyPayment - $interestPart, 2);
             }
 
             $balance = round($balance - $principalPart, 2);
 
             LoanAmortization::create([
-                'loan_id'       => $loan->id,
-                'due_date'      => $startDate->copy()->addMonths($i - 1)->format('Y-m-d'),
-                'amount_to_pay' => round($monthlyPayment, 2),
-                'principal_part'=> $principalPart,
-                'interest_part' => $interestPart,
-                'status'        => 'pending',
+                'loan_id'        => $loan->id,
+                'due_date'       => $startDate->copy()->addMonths($i - 1)->format('Y-m-d'),
+                // Sum of parts is more accurate than the rounded average
+                'amount_to_pay'  => $principalPart + $interestPart, 
+                'principal_part' => $principalPart,
+                'interest_part'  => $interestPart,
+                'status'         => 'pending',
             ]);
         }
     }

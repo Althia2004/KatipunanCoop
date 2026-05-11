@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Member;
 use App\Models\Loan;
+use App\Models\LoanRequest;
 use App\Models\Announcement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -95,14 +96,16 @@ class MemberPortalController extends Controller
         ]);
     }
 
+    
     public function loans()
     {
         $user   = auth()->user();
         $member = $this->getMember();
 
-        // Check loan eligibility
+        // 1. Check loan eligibility (Existing logic)
         $eligibility = app(\App\Services\LoanEligibilityService::class)->check($member);
 
+        // 2. Fetch Active Loans & Amortizations (Existing logic)
         $loans = Loan::where('member_id', $user->id)
             ->with([
                 'amortizations' => fn($q) => $q->orderBy('due_date'),
@@ -121,7 +124,7 @@ class MemberPortalController extends Controller
                 'created_at'        => $loan->created_at->format('M d, Y'),
                 'amortizations'     => $loan->amortizations->map(fn($a) => [
                     'id'            => $a->id,
-                    'due_date'      => \Carbon\Carbon::parse($a->due_date)->format('M d, Y'),
+                    'due_date'      => Carbon::parse($a->due_date)->format('M d, Y'),
                     'amount_to_pay' => (float) ($a->amount_to_pay ?? $a->amount_due ?? 0),
                     'principal_part'=> (float) ($a->principal_part ?? $a->principal_portion ?? 0),
                     'interest_part' => (float) ($a->interest_part ?? $a->interest_portion ?? 0),
@@ -130,12 +133,57 @@ class MemberPortalController extends Controller
                 ])->values(),
             ]);
 
+        // 3. Fetch Loan Application History (New logic)
+        $loanRequests = LoanRequest::where('requested_by', $user->id)
+            ->latest()
+            ->get()
+            ->map(fn($lr) => [
+                'id'               => $lr->id,
+                'amount'           => (float) $lr->amount,
+                'purpose'          => $lr->purpose,
+                'status'           => $lr->status,
+                'term_months'      => $lr->term_months,
+                'interest_rate'    => (float) $lr->interest_rate,
+                'rejection_reason' => $lr->rejection_reason,
+                'requested_at'     => $lr->created_at->format('M d, Y'),
+            ]);
+
         return inertia('member/Loans', [
-            'loans'       => $loans,
-            'eligibility' => $eligibility,
-            'member'      => ['name' => $member->name],
-            'user'        => ['name' => $user->name],
+            'loans'         => $loans,          // Active disbursed loans
+            'loanRequests'  => $loanRequests,   // Application history
+            'eligibility'   => $eligibility,
+            'member'        => ['name' => $member->name],
+            'user'          => ['name' => $user->name],
         ]);
+    }
+
+    public function storeLoanRequest(Request $request)
+    {
+        $request->validate([
+            'amount'      => ['required', 'numeric', 'min:1000'],
+            'term_months' => ['required', 'integer', 'min:1', 'max:60'],
+            'purpose'     => ['required', 'string', 'max:500'],
+        ]);
+
+        $member = $this->getMember();
+
+        LoanRequest::create([
+            'amount'        => $request->amount,
+            'term_months'   => $request->term_months,
+            'purpose'       => $request->purpose,
+            'requested_by'  => auth()->id(),
+            'requested_at'  => now(),
+            'status'        => 'pending',
+            'interest_rate' => 1.0, // Set your default base rate or calculate dynamically
+            'requested_at'  => now(),
+        ]);
+
+        activity()
+            ->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log("Submitted a new loan request for ₱" . number_format($request->amount, 2));
+
+        return back()->with('success', 'Your loan application has been submitted and is awaiting review.');
     }
 
     public function savings()
