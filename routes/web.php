@@ -11,6 +11,7 @@ use App\Http\Controllers\MemberAuthController;
 use App\Http\Controllers\MemberController;
 use App\Http\Controllers\MemberPortalController;
 use App\Http\Controllers\MemberRegistrationController;
+use App\Http\Controllers\SeminarController;
 use App\Http\Controllers\SuperadminController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
@@ -105,6 +106,8 @@ Route::prefix('member')
     ->group(function () {
         Route::get('/dashboard',      [MemberPortalController::class, 'dashboard'])->name('member.dashboard');
         Route::get('/loans',          [MemberPortalController::class, 'loans'])->name('member.loans');
+        Route::get('/payments',       [MemberPortalController::class, 'payments'])->name('member.payments');
+        Route::post('/payments',      [MemberPortalController::class, 'storePayment'])->name('member.payments.store');
         Route::get('/savings',        [MemberPortalController::class, 'savings'])->name('member.savings');
         Route::post('/savings/deposit', [MemberPortalController::class, 'savingsDeposit'])->name('member.savings.deposit');
         Route::post('/savings/withdraw', [MemberPortalController::class, 'savingsWithdraw'])->name('member.savings.withdraw');
@@ -125,12 +128,6 @@ Route::middleware(['auth'])->group(function () {
     Route::inertia('/bookkeeper/dashboard', 'ComingSoon', ['page' => 'Bookkeeper Dashboard'])->name('bookkeeper.dashboard');
     Route::inertia('/hr/dashboard',         'ComingSoon', ['page' => 'HR Manager Dashboard'])->name('hr.dashboard');
 });
-
-Route::prefix('{current_team}')
-    ->middleware(['auth', 'verified', EnsureTeamMembership::class])
-    ->group(function () {
-        Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    });
 
 Route::middleware(['auth'])->group(function () {
     Route::get('invitations/{invitation}/accept', [TeamInvitationController::class, 'accept'])
@@ -209,6 +206,10 @@ Route::middleware(['auth'])->group(function () {
         ->name('user.member-management.toggle-status');
     Route::patch('/user/member-management/{member}/request-deletion', [MemberController::class, 'requestDeletion'])
         ->name('user.member-management.request-deletion');
+    Route::patch('/user/member-management/{member}/migs-score', [MemberController::class, 'updateMigsScore'])
+        ->name('user.member-management.migs-score');
+    Route::post('/user/member-management/{member}/recalculate-migs', [MemberController::class, 'recalculateMigsScore'])
+        ->name('user.member-management.recalculate-migs');
 
     Route::get('/user/amortization', [MemberController::class, 'amortization'])
         ->name('user.amortization');
@@ -234,11 +235,13 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/user/payments', [MemberController::class, 'payments'])
         ->name('user.payments');
+    Route::post('/user/payments/capital', [MemberController::class, 'recordCapitalPayment'])
+        ->name('user.payments.capital.store');
     Route::post('/user/payments', [MemberController::class, 'recordPayment'])
         ->name('user.payments.store');
     Route::put('/user/payments/{payment}', [MemberController::class, 'updatePayment'])
         ->name('user.payments.update');
-    Route::get('/user/payments/{payment}/receipt', [MemberController::class, 'downloadReceipt'])
+    Route::get('/user/payments/{id}/receipt', [MemberController::class, 'downloadReceipt'])
         ->name('user.payments.receipt');
 });
 
@@ -259,5 +262,13 @@ Route::prefix('api')->middleware(['auth'])->group(function () {
     Route::put('/members/{member}/reject', [MemberController::class, 'reject'])
         ->name('api.members.reject');
 });
+
+// ── {current_team} wildcard MUST be last ──
+Route::prefix('{current_team}')
+    ->middleware(['auth', 'verified', EnsureTeamMembership::class])
+    ->where(['current_team' => '^(?!user|member|superadmin|admin|api|login|logout|register|loan|reports|settings|invitations|dashboard)[a-z0-9-]+$'])
+    ->group(function () {
+        Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    });
 
 require __DIR__.'/settings.php';

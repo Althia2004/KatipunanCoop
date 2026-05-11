@@ -21,6 +21,8 @@ export default function MemberManagementDashboard({ members }: Props) {
     const [viewMember, setViewMember] = useState<Member | null>(null);
     const [editMember, setEditMember] = useState<Member | null>(null);
     const [editForm, setEditForm] = useState({ first_name: '', last_name: '', contact_number: '', source_of_income: '' });
+    const [editMigsOpen, setEditMigsOpen] = useState(false);
+    const [migsForm, setMigsForm] = useState({ migs_score: 0, migs_classification: 'non_migs' as 'migs' | 'non_migs' });
 
     const filtered = members.filter((m) => {
         const q = search.toLowerCase();
@@ -101,23 +103,54 @@ export default function MemberManagementDashboard({ members }: Props) {
 
                             {/* MIGS Score */}
                             <div className="px-6 py-4 border-b border-zinc-100">
-                                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-2">MIGS Score</p>
+                                <div className="flex items-center justify-between mb-2">
+                                    <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">MIGS Score</p>
+                                    <button
+                                        onClick={() => {
+                                            setMigsForm({
+                                                migs_score: viewMember.migs_score,
+                                                migs_classification: viewMember.migs_classification,
+                                            });
+                                            setEditMigsOpen(true);
+                                        }}
+                                        className="text-xs text-[#2d5a27] hover:underline flex items-center gap-1"
+                                    >
+                                        ✏ Edit Score
+                                    </button>
+                                </div>
                                 <div className="flex items-center gap-3">
                                     <div className="flex-1 h-2 bg-zinc-200 rounded-full overflow-hidden">
                                         <div
-                                            className="h-full bg-[#2d5a27] rounded-full transition-all"
-                                            style={{
-                                                width: `${
-                                                    viewMember.membership_status === 'good' ? 80 :
-                                                    viewMember.membership_status === 'warning' ? 50 : 20
-                                                }%`,
-                                            }}
+                                            className={`h-full rounded-full transition-all ${
+                                                viewMember.migs_score >= 50 ? 'bg-[#2d5a27]' : 'bg-red-400'
+                                            }`}
+                                            style={{ width: `${Math.min(viewMember.migs_score, 100)}%` }}
                                         />
                                     </div>
-                                    <span className="text-sm font-semibold text-zinc-700 shrink-0">
-                                        {viewMember.membership_status === 'good' ? 80 :
-                                         viewMember.membership_status === 'warning' ? 50 : 20}/100
+                                    <span className="text-sm font-bold text-zinc-700 shrink-0">
+                                        {viewMember.migs_score}/100
                                     </span>
+                                </div>
+                                <div className="flex items-center justify-between mt-2">
+                                    <p className="text-xs text-zinc-400">
+                                        {viewMember.migs_score >= 50
+                                            ? '✓ MIGS — Member is in good standing'
+                                            : '✗ Non-MIGS — Below minimum score (50)'}
+                                    </p>
+                                    <button
+                                        onClick={() => {
+                                            if (confirm(`Recalculate MIGS score for ${viewMember.name}?`)) {
+                                                router.post(
+                                                    `/user/member-management/${viewMember.id}/recalculate-migs`,
+                                                    {},
+                                                    { preserveScroll: true }
+                                                );
+                                            }
+                                        }}
+                                        className="text-xs text-zinc-400 hover:text-zinc-600 hover:underline"
+                                    >
+                                        ↻ Recalculate
+                                    </button>
                                 </div>
                             </div>
 
@@ -145,8 +178,9 @@ export default function MemberManagementDashboard({ members }: Props) {
                                 {[
                                     { label: 'Member Since', value: viewMember.start_date ?? '—' },
                                     { label: 'Standing', value: viewMember.standing },
-                                    { label: 'Share Capital', value: '₱0.00' },
-                                    { label: 'Savings Balance', value: '₱0.00' },
+                                    { label: 'Share Capital', value: `₱${viewMember.share_capital.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` },
+                                    { label: 'Savings Balance', value: `₱${viewMember.savings_balance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` },
+                                    { label: 'Copra Sales YTD', value: `₱${(viewMember.copra_sales_ytd ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` },
                                 ].map((row) => (
                                     <div key={row.label} className="flex justify-between items-center py-2.5 border-b border-zinc-50 last:border-0">
                                         <span className="text-sm text-zinc-500 shrink-0">{row.label}</span>
@@ -158,9 +192,31 @@ export default function MemberManagementDashboard({ members }: Props) {
                             {/* Loan History */}
                             <div className="px-6 py-4 border-b border-zinc-100">
                                 <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-3">Loan History</p>
-                                <div className="rounded-xl border border-zinc-100 bg-zinc-50 py-8 text-center">
-                                    <p className="text-sm text-zinc-400">No loan records found.</p>
-                                </div>
+                                {viewMember.loans && viewMember.loans.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {viewMember.loans.map((loan) => (
+                                            <div key={loan.id} className="rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-sm font-semibold text-zinc-700">Loan #{loan.id}</span>
+                                                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${
+                                                        loan.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
+                                                        loan.status === 'fully_paid' ? 'bg-zinc-100 text-zinc-600' :
+                                                        'bg-red-100 text-red-600'
+                                                    }`}>{loan.status.replace('_', ' ')}</span>
+                                                </div>
+                                                <div className="mt-1 flex justify-between text-xs text-zinc-500">
+                                                    <span>Principal: ₱{loan.principal_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                                                    <span>Balance: ₱{loan.remaining_balance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                                                </div>
+                                                <p className="mt-0.5 text-xs text-zinc-400">{loan.created_at}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="rounded-xl border border-zinc-100 bg-zinc-50 py-8 text-center">
+                                        <p className="text-sm text-zinc-400">No loan records found.</p>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Footer */}
@@ -176,6 +232,84 @@ export default function MemberManagementDashboard({ members }: Props) {
                     )}
                 </SheetContent>
             </Sheet>
+
+            {/* ── MIGS Score Edit Dialog ── */}
+            <Dialog open={editMigsOpen} onOpenChange={(o) => !o && setEditMigsOpen(false)}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Edit MIGS Score</DialogTitle>
+                    </DialogHeader>
+                    {viewMember && (
+                        <div className="space-y-4 py-2">
+                            <p className="text-sm text-zinc-500">
+                                Manually set MIGS score for <strong className="text-zinc-700">{viewMember.name}</strong>
+                            </p>
+                            <div className="space-y-1.5">
+                                <Label>MIGS Score (0–100)</Label>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    value={migsForm.migs_score}
+                                    onChange={(e) => {
+                                        const score = Math.min(100, Math.max(0, Number(e.target.value)));
+                                        setMigsForm(f => ({
+                                            ...f,
+                                            migs_score: score,
+                                            migs_classification: score >= 50 ? 'migs' : 'non_migs',
+                                        }));
+                                    }}
+                                    className="w-full h-9 rounded-xl border border-zinc-200 px-3 text-sm focus:ring-2 focus:ring-[#2d5a27] outline-none"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex-1 h-2 bg-zinc-200 rounded-full overflow-hidden">
+                                        <div
+                                            className={`h-full rounded-full transition-all ${
+                                                migsForm.migs_score >= 50 ? 'bg-[#2d5a27]' : 'bg-red-400'
+                                            }`}
+                                            style={{ width: `${migsForm.migs_score}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-sm font-bold shrink-0 text-zinc-700">
+                                        {migsForm.migs_score}/100
+                                    </span>
+                                </div>
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                    migsForm.migs_classification === 'migs'
+                                        ? 'bg-[#2d5a27]/10 text-[#2d5a27]'
+                                        : 'bg-red-100 text-red-600'
+                                }`}>
+                                    {migsForm.migs_classification === 'migs' ? '✓ MIGS' : '✗ Non-MIGS'}
+                                </span>
+                            </div>
+                            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700">
+                                ⚠ Manual override. Use “Recalculate” in the sheet to restore automatic scoring.
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" onClick={() => setEditMigsOpen(false)}>Cancel</Button>
+                        <Button
+                            onClick={() => {
+                                if (!viewMember) return;
+                                router.patch(
+                                    `/user/member-management/${viewMember.id}/migs-score`,
+                                    migsForm,
+                                    {
+                                        preserveScroll: true,
+                                        onSuccess: () => setEditMigsOpen(false),
+                                    }
+                                );
+                            }}
+                            className="bg-[#2d5a27] hover:bg-[#1e3e1a] text-white"
+                        >
+                            Save Score
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* ── Edit Dialog ── */}
             <Dialog open={!!editMember} onOpenChange={(open) => !open && setEditMember(null)}>

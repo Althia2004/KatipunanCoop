@@ -141,6 +141,127 @@ class MemberPortalController extends Controller
         ]);
     }
 
+    public function payments()
+    {
+        $user   = auth()->user();
+        $member = $this->getMember();
+
+        // Loan payments
+        $loanPayments = \App\Models\LoanPayment::whereIn(
+            'loan_id',
+            Loan::where('member_id', $user->id)->pluck('id')
+        )
+        ->with(['loan', 'recordedBy'])
+        ->latest('payment_date')
+        ->get()
+        ->map(fn ($p) => [
+            'id'               => $p->id,
+            'loan_id'          => $p->loan_id,
+            'amount_paid'      => (float) $p->amount_paid,
+            'payment_date'     => \Carbon\Carbon::parse($p->payment_date)->format('M d, Y'),
+            'payment_method'   => $p->payment_method ?? 'cash',
+            'payment_type'     => $p->payment_type ?? 'onsite',
+            'reference_number' => $p->reference_number ?? null,
+            'remarks'          => $p->remarks ?? null,
+            'recorded_by'      => $p->recordedBy?->name ?? 'Staff',
+            'category'         => 'loan',
+        ]);
+
+        // Capital share contributions
+        $capitalPayments = collect();
+        try {
+            $capitalPayments = \App\Models\CapitalShareTransaction::where('member_id', $member->id)
+                ->where('type', 'credit')
+                ->latest()
+                ->get()
+                ->map(fn ($t) => [
+                    'id'               => $t->id,
+                    'loan_id'          => null,
+                    'amount_paid'      => (float) $t->amount,
+                    'payment_date'     => $t->created_at->format('M d, Y'),
+                    'payment_method'   => 'cash',
+                    'payment_type'     => 'onsite',
+                    'reference_number' => null,
+                    'remarks'          => $t->remarks ?? null,
+                    'recorded_by'      => 'Staff',
+                    'category'         => 'capital_share',
+                ]);
+        } catch (\Exception $e) {}
+
+        $allPayments = collect([...$loanPayments, ...$capitalPayments])
+            ->sortByDesc('payment_date')
+            ->values();
+
+        // Active loans for Make Payment dialog
+        $activeLoans = Loan::where('member_id', $user->id)
+            ->where('status', 'active')
+            ->where('remaining_balance', '>', 0)
+            ->get()
+            ->map(fn ($l) => [
+                'id'                => $l->id,
+                'loan_type'         => 'Loan #' . $l->id,
+                'remaining_balance' => (float) ($l->remaining_balance ?? 0),
+                'principal_amount'  => (float) ($l->principal_amount ?? 0),
+            ]);
+
+        return inertia('member/Payments', [
+            'member'   => [
+                'name'            => $member->name,
+                'savings_balance' => (float) ($member->savings_balance ?? 0),
+                'share_capital'   => (float) ($member->share_capital ?? 0),
+            ],
+            'payments' => $allPayments,
+            'loans'    => $activeLoans,
+            'stats'    => [
+                'total_loan_paid'    => $loanPayments->sum('amount_paid'),
+                'total_capital_paid' => $capitalPayments->sum('amount_paid'),
+                'total_payments'     => $allPayments->count(),
+                'last_payment'       => $allPayments->first()['payment_date'] ?? null,
+            ],
+            'user' => ['name' => $user->name, 'email' => $user->email],
+        ]);
+    }
+
+    public function storePayment(Request $request)
+    {
+        $validated = $request->validate([
+            'loan_id'          => 'required|integer|exists:loans,id',
+            'amount'           => 'required|numeric|min:1',
+            'payment_method'   => 'required|in:cash,gcash,maya,bpi,credit_card,debit_card',
+            'payment_type'     => 'nullable|in:onsite,online',
+            'reference_number' => 'nullable|string|max:100',
+            'remarks'          => 'nullable|string|max:500',
+        ]);
+
+        $loan = Loan::where('id', $validated['loan_id'])
+            ->where('member_id', auth()->id())
+            ->where('status', 'active')
+            ->firstOrFail();
+
+        if ((float) $validated['amount'] > (float) ($loan->remaining_balance ?? 0)) {
+            return back()->withErrors(['amount' => 'Payment exceeds the remaining loan balance.']);
+        }
+
+        \App\Models\LoanPayment::create([
+            'loan_id'          => $loan->id,
+            'amount_paid'      => $validated['amount'],
+            'payment_date'     => now()->toDateString(),
+            'payment_method'   => $validated['payment_method'],
+            'payment_type'     => $validated['payment_type'] ?? 'onsite',
+            'reference_number' => $validated['reference_number'] ?? null,
+            'remarks'          => $validated['remarks'] ?? null,
+            'recorded_by'      => auth()->id(),
+        ]);
+
+        $loan->decrement('remaining_balance', $validated['amount']);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($loan)
+            ->log("Member loan payment: ₱{$validated['amount']} on loan #{$loan->id}");
+
+        return back()->with('success', 'Payment submitted successfully.');
+    }
+
     public function savings()
     {
         $user   = auth()->user();

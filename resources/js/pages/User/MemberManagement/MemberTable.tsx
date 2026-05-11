@@ -17,6 +17,18 @@ export interface Member {
     standing: string;
     start_date: string | null;
     last_login: string | null;
+    migs_score: number;
+    migs_classification: 'migs' | 'non_migs';
+    share_capital: number;
+    savings_balance: number;
+    copra_sales_ytd: number;
+    loans: {
+        id: number;
+        principal_amount: number;
+        remaining_balance: number;
+        status: string;
+        created_at: string;
+    }[];
 }
 
 interface MemberTableProps {
