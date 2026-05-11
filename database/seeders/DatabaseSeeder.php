@@ -18,6 +18,8 @@ class DatabaseSeeder extends Seeder
             AdminSeeder::class,
             UserSeeder::class,
             MemberSeeder::class,
+            LoanSeeder::class,
+            LoanRequestSeeder::class,
         ]);
 
         // User::factory(10)->create();
