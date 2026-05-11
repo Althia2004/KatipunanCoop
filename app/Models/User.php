@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Concerns\HasTeams;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne; // Added for shareAccount
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -19,16 +20,11 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasTeams, Notifiable, TwoFactorAuthenticatable;
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            'email_verified_at'       => 'datetime',
+            'password'                => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
         ];
     }
@@ -45,18 +41,44 @@ class User extends Authenticatable
 
     public function dashboardRouteName(): string
     {
-        if ($this->isSuperadmin()) {
-            return 'superadmin.dashboard';
-        }
-
-        if ($this->isAdmin()) {
-            return 'dashboard';
-        }
-
-        return 'member.dashboard';
+        return match($this->role) {
+            'superadmin' => 'superadmin.dashboard',
+            'admin'      => 'admin.dashboard',
+            'manager'    => 'manager.dashboard',
+            'bookkeeper' => 'bookkeeper.dashboard',
+            'hr'         => 'hr.dashboard',
+            'board'      => 'board.dashboard',
+            'member'     => 'member.dashboard',
+            'default'    => 'superadmin.dashboard',
+        };
     }
 
-    public function shareAccount()
+    public function dashboardUrl(): string
+    {
+        if ($this->role === 'admin') {
+            $team = $this->currentTeam ?? $this->personalTeam();
+            if ($team) {
+                return '/' . $team->slug . '/dashboard';
+            }
+        }
+
+        return match($this->role) {
+            'superadmin' => '/superadmin/dashboard',
+            'manager'    => '/manager/dashboard',
+            'bookkeeper' => '/bookkeeper/dashboard',
+            'hr'         => '/hr/dashboard',
+            'board'      => '/board/dashboard',
+            'member'     => '/member/dashboard',
+            'default'    => '/login',
+        };
+    }
+
+    public function loans(): HasMany
+    {
+        return $this->hasMany(Loan::class, 'member_id');
+    }
+
+    public function shareAccount(): HasOne
     {
         return $this->hasOne(ShareAccount::class);
     }

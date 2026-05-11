@@ -16,7 +16,6 @@ class MemberRegistration extends Model
     const STATUS_PENDING           = 'pending';
     const STATUS_SEMINAR_SCHEDULED = 'seminar_scheduled';
     const STATUS_SEMINAR_ATTENDED  = 'seminar_attended';
-    const STATUS_FOR_BOD_APPROVAL  = 'for_bod_approval';
     const STATUS_APPROVED          = 'approved';
     const STATUS_REJECTED          = 'rejected';
 
@@ -79,8 +78,4 @@ class MemberRegistration extends Model
         $this->update(['status' => self::STATUS_SEMINAR_ATTENDED]);
     }
 
-    public function endorseToBod(): void
-    {
-        $this->update(['status' => self::STATUS_FOR_BOD_APPROVAL]);
-    }
 }

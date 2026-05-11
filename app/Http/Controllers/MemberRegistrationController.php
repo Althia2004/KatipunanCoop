@@ -5,8 +5,11 @@ namespace App\Http\Controllers;
 use App\Http\Requests\MemberRegistration\AssignSeminarRequest;
 use App\Http\Requests\MemberRegistration\StoreMemberRegistrationRequest;
 use App\Models\MemberRegistration;
+use App\Models\Member;
 use App\Models\Seminar;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -47,6 +50,7 @@ class MemberRegistrationController extends Controller
 
     /**
      * Persist the registration, co-maker, and initial beneficiaries in one transaction.
+     * Also creates a pending Member record for superadmin approval.
      */
     public function store(StoreMemberRegistrationRequest $request): RedirectResponse
     {
@@ -66,9 +70,20 @@ class MemberRegistrationController extends Controller
             $registration->beneficiaries()->create($beneficiary);
         }
 
+        // Create a pending Member record for superadmin approval workflow
+        Member::create([
+            'member_registration_id' => $registration->id,
+            'name' => $registration->full_name,
+            'gender' => $validated['gender'] ?? null,
+            'status' => Member::STATUS_PENDING,
+            'membership_status' => Member::MEMBERSHIP_GOOD,
+            'standing' => 'active',
+            'start_date' => now()->toDateString(),
+        ]);
+
         return redirect()
             ->route('loan.member-registration.show', $registration)
-            ->with('message', 'Registration submitted successfully.');
+            ->with('message', 'Registration submitted successfully. Awaiting superadmin approval.');
     }
 
     /**
@@ -83,9 +98,16 @@ class MemberRegistrationController extends Controller
             ->orderBy('scheduled_at')
             ->get(['id', 'title', 'scheduled_at', 'location']);
 
+        // Check if a portal account already exists for this member
+        $user = User::where('role', 'member')
+            ->where('name', trim("{$memberRegistration->first_name} {$memberRegistration->last_name}"))
+            ->first();
+
         return Inertia::render('Loan/MemberRegistration/MemberRegistrationShow', [
             'registration'      => $memberRegistration,
             'availableSeminars' => $availableSeminars,
+            'has_account'       => $user !== null,
+            'account_email'     => $user?->email,
         ]);
     }
 
@@ -124,22 +146,31 @@ class MemberRegistrationController extends Controller
 
         $memberRegistration->markSeminarAttended();
 
-        return back()->with('message', 'Attendance confirmed.');
+        return back()->with('message', 'Attendance confirmed. Awaiting superadmin approval.');
     }
 
     /**
-     * Endorse to BOD → status becomes "for_bod_approval".
+     * Assign a member portal account (email + password).
      */
-    public function endorseToBod(MemberRegistration $memberRegistration): RedirectResponse
+    public function assignAccount(Request $request, MemberRegistration $memberRegistration): RedirectResponse
     {
-        abort_if(
-            $memberRegistration->status !== MemberRegistration::STATUS_SEMINAR_ATTENDED,
-            422,
-            'Registration must have completed the seminar before endorsing to BOD.'
-        );
+        $validated = $request->validate([
+            'email'    => ['required', 'email', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8'],
+        ]);
 
-        $memberRegistration->endorseToBod();
+        User::create([
+            'name'              => trim("{$memberRegistration->first_name} {$memberRegistration->last_name}"),
+            'email'             => $validated['email'],
+            'password'          => $validated['password'],
+            'role'              => 'member',
+            'email_verified_at' => now(),
+        ]);
 
-        return back()->with('message', 'Registration endorsed to Board of Directors.');
+        activity()->causedBy(auth()->user())
+            ->performedOn($memberRegistration)
+            ->log('Member portal account created');
+
+        return back()->with('message', 'Portal account created successfully.');
     }
 }

@@ -16,6 +16,16 @@ class SetTeamUrlDefaults
      */
     public function handle(Request $request, Closure $next): Response
     {
+        // Bypass team URL logic for superadmin and member portal
+        if (
+            $request->is('superadmin') ||
+            $request->is('superadmin/*') ||
+            $request->is('member') ||
+            $request->is('member/*')
+        ) {
+            return $next($request);
+        }
+
         if ($currentTeam = $request->user()?->currentTeam) {
             URL::defaults([
                 'current_team' => $currentTeam->slug,

@@ -21,7 +21,6 @@ class SeminarController extends Controller
                 'status'         => $r->status,
                 'attended'       => in_array($r->status, [
                     MemberRegistration::STATUS_SEMINAR_ATTENDED,
-                    MemberRegistration::STATUS_FOR_BOD_APPROVAL,
                     MemberRegistration::STATUS_APPROVED,
                 ]),
             ]);

@@ -4,16 +4,19 @@ import {
     Banknote,
     BookOpen,
     BriefcaseBusiness,
+    CreditCard,
     FileText,
     FolderGit2,
     LayoutGrid,
     Scale,
+    TrendingUp,
     UserCircle,
     Users,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
+import { NavSuperadmin } from '@/components/nav-superadmin';
 import { NavUser } from '@/components/nav-user';
 import {
     Sidebar,
@@ -102,6 +105,16 @@ export function AppSidebar() {
             href: '/user/dividend-reports',
             icon: Banknote,
         },
+        {
+            title: 'Patronage Reports',
+            href: '/user/patronage-reports',
+            icon: TrendingUp,
+        },
+        {
+            title: 'Payment Dashboard',
+            href: '/user/payments',
+            icon: CreditCard,
+        },
     ];
 
     const footerNavItems: NavItem[] = [
@@ -132,11 +145,15 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain
-                    featureItems={featureNavItems}
-                    loanItems={loanNavItems}
-                    userItems={userNavItems}
-                />
+                {userRole === 'superadmin' ? (
+                    <NavSuperadmin />
+                ) : (
+                    <NavMain
+                        featureItems={featureNavItems}
+                        loanItems={loanNavItems}
+                        userItems={userNavItems}
+                    />
+                )}
             </SidebarContent>
 
             <SidebarFooter>

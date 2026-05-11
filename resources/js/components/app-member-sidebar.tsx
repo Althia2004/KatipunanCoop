@@ -1,12 +1,5 @@
 // resources/js/components/app-member-sidebar.tsx
 
-import { Link } from '@inertiajs/react';
-import { 
-    Banknote, 
-    BookOpen, 
-    FolderGit2, 
-    PiggyBank // Added icon for Share Capital
-} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -21,6 +14,18 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import type { NavItem } from '@/types';
+import { Link } from '@inertiajs/react';
+import {
+    Banknote,
+    BookOpen,
+    CreditCard,
+    FolderGit2,
+    Megaphone,
+    PiggyBank,
+    Settings,
+    TrendingUp,
+    User
+} from 'lucide-react';
 
 export function AppMemberSidebar() {
     const dashboardUrl = '/member/dashboard';
@@ -31,8 +36,12 @@ export function AppMemberSidebar() {
             href: '/member/capital-shares',
             icon: PiggyBank,
         },
+        {
+            title: 'Announcements',
+            href: '/member/announcements',
+            icon: Megaphone,
+        },
     ];
-
 
     const loanNavItems: NavItem[] = [
         {
@@ -40,9 +49,40 @@ export function AppMemberSidebar() {
             href: '/loan/management',
             icon: Banknote,
         },
+        {
+            title: 'My Loans',
+            href: '/member/loans',
+            icon: Banknote,
+        },
+        {
+            title: 'My Payments',
+            href: '/member/payments',
+            icon: CreditCard,
+        },
     ];
 
-    const userNavItems: NavItem[] = [];
+    const userNavItems: NavItem[] = [
+        {
+            title: 'Savings & Capital',
+            href: '/member/savings',
+            icon: PiggyBank,
+        },
+        {
+            title: 'Dividends',
+            href: '/member/dividends',
+            icon: TrendingUp,
+        },
+        {
+            title: 'My Profile',
+            href: '/member/profile',
+            icon: User,
+        },
+        {
+            title: 'Settings',
+            href: '/member/settings',
+            icon: Settings,
+        },
+    ];
 
     const footerNavItems: NavItem[] = [
         {

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\User;
 
 class LoanPayment extends Model
 {
@@ -15,6 +16,9 @@ class LoanPayment extends Model
         'payment_method',
         'reference_number',
         'remarks',
+        'recorded_by',
+        'updated_by',
+        'payment_type',
     ];
 
     /**
@@ -31,5 +35,15 @@ class LoanPayment extends Model
     public function amortization(): BelongsTo
     {
         return $this->belongsTo(LoanAmortization::class, 'loan_amortization_id');
+    }
+
+    public function recordedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'recorded_by');
+    }
+
+    public function updatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 }
