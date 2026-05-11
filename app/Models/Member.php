@@ -80,4 +80,9 @@ class Member extends Model
     {
         return $this->hasMany(CapitalShareTransaction::class);
     }
+
+    public function loans(): HasMany
+    {
+        return $this->hasMany(Loan::class, 'member_id', 'user_id');
+    }
 }
