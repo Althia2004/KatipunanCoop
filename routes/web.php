@@ -81,8 +81,8 @@ Route::prefix('superadmin')
         Route::get('/settings/interest', [SuperadminController::class, 'settings'])->name('superadmin.settings');
         Route::post('/settings', [SuperadminController::class, 'updateSettings'])->name('superadmin.settings.update');
         Route::get('/audit', [SuperadminController::class, 'audit'])->name('superadmin.audit');
-        Route::get('/reports/annual', fn () => redirect('/reports/annual'))->name('superadmin.reports.annual');
-        Route::post('/reports/annual', [SuperadminController::class, 'storeAnnualReport'])->name('superadmin.reports.annual.store');
+       Route::get('/reports/annual', [AnnualReportsController::class, 'superadminIndex'])->name('superadmin.reports.annual');
+        Route::post('/reports/annual', [AnnualReportsController::class, 'store'])->name('superadmin.reports.annual.store');
         Route::get('/reports/annual/{meeting}/download', [SuperadminController::class, 'downloadAnnualReport'])->name('superadmin.reports.annual.download');
         Route::get('/reports/financial', [SuperadminController::class, 'financialReports'])->name('superadmin.reports.financial');
         Route::get('/members', [SuperadminController::class, 'members'])->name('superadmin.members');
@@ -260,6 +260,10 @@ Route::middleware(['auth'])->group(function () {
         ->name('user.dividend-reports');
     Route::get('/user/dividend-reports/download', [MemberController::class, 'downloadDividendReports'])
         ->name('user.dividend-reports.download');
+    Route::post('/user/dividend-reports/verify', [MemberController::class, 'verifyDividend'])
+        ->name('user.dividend-reports.verify');
+    Route::post('/user/dividend-reports/release', [MemberController::class, 'releaseDividend'])
+        ->name('user.dividend-reports.release');
 
     // Patronage Reports
     Route::get('/user/patronage-reports', [MemberController::class, 'patronageReports'])

@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DividendRecord;
 use App\Models\Member;
 use App\Models\Loan;
 use App\Models\LoanAmortization;
 use App\Models\LoanPayment;
+use App\Models\SystemSetting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
@@ -516,27 +518,53 @@ class MemberController extends Controller
     public function dividendReports(Request $request): Response
     {
         $year         = (int) $request->input('year', now()->year);
-        $totalCapital = (float) (Member::sum('share_capital') ?? 0);
+        $user         = auth()->user();
 
-        $netSurplus   = (float) \App\Models\SystemSetting::get('annual_net_surplus', 0);
-        $dividendPool = $netSurplus * 0.70; // 70% of net surplus distributed as dividends
+        $totalCapital = (float) (Member::where('status', Member::STATUS_REGULAR)->sum('share_capital') ?? 0);
+        $netSurplus   = (float) SystemSetting::get('annual_net_surplus', 0);
+        $dividendRule = (float) SystemSetting::get('dividend_rule', 70);
+        $dividendPool = $netSurplus * ($dividendRule / 100);
 
-        $members = Member::with('memberRegistration')
-            ->whereNotIn('status', [Member::STATUS_PENDING, Member::STATUS_REJECTED])
-            ->get()
-            ->map(fn ($m) => [
-                'id'              => $m->id,
-                'name'            => $m->name,
-                'share_capital'   => (float) $m->share_capital,
-                'capital_pct'     => $totalCapital > 0
-                    ? round(((float) $m->share_capital / $totalCapital) * 100, 4)
-                    : 0,
-                'dividend_amount' => $totalCapital > 0 && $dividendPool > 0
-                    ? round(((float) $m->share_capital / $totalCapital) * $dividendPool, 2)
-                    : 0,
-                'status'          => 'tentative',
-                'year'            => $year,
-            ]);
+        $regularMembers = Member::where('status', Member::STATUS_REGULAR)->get();
+
+        foreach ($regularMembers as $m) {
+            $shareCapital   = (float) $m->share_capital;
+            $capitalPct     = $totalCapital > 0 ? round(($shareCapital / $totalCapital) * 100, 4) : 0;
+            $dividendAmount = ($totalCapital > 0 && $dividendPool > 0)
+                ? round(($shareCapital / $totalCapital) * $dividendPool, 2)
+                : 0;
+
+            $record = DividendRecord::firstOrNew(['member_id' => $m->id, 'year' => $year]);
+
+            if (!$record->exists || $record->status === DividendRecord::STATUS_TENTATIVE) {
+                $record->share_capital   = $shareCapital;
+                $record->capital_pct     = $capitalPct;
+                $record->dividend_amount = $dividendAmount;
+                if (!$record->exists) {
+                    $record->status = DividendRecord::STATUS_TENTATIVE;
+                }
+                $record->save();
+            }
+        }
+
+        $records = DividendRecord::with(['member', 'verifiedBy', 'releasedBy'])
+            ->where('year', $year)
+            ->whereHas('member', fn ($q) => $q->where('status', Member::STATUS_REGULAR))
+            ->get();
+
+        $members = $records->map(fn ($r) => [
+            'id'               => $r->member_id,
+            'name'             => $r->member->name,
+            'share_capital'    => (float) $r->share_capital,
+            'capital_pct'      => (float) $r->capital_pct,
+            'dividend_amount'  => (float) $r->dividend_amount,
+            'status'           => $r->status,
+            'year'             => $r->year,
+            'verified_by_name' => $r->verifiedBy?->name,
+            'verified_at'      => $r->verified_at?->format('M d, Y g:i A'),
+            'released_by_name' => $r->releasedBy?->name,
+            'released_at'      => $r->released_at?->format('M d, Y g:i A'),
+        ]);
 
         return Inertia::render('User/DividendReports', [
             'members'        => $members->values(),
@@ -546,25 +574,73 @@ class MemberController extends Controller
             'netSurplus'     => $netSurplus,
             'dividendPool'   => $dividendPool,
             'availableYears' => range(now()->year, now()->year - 5),
+            'canVerify'      => in_array($user->role, ['bookkeeper', 'superadmin']),
+            'canRelease'     => $user->role === 'superadmin',
         ]);
+    }
+
+    public function verifyDividend(Request $request): RedirectResponse
+    {
+        $validated = $request->validate(['year' => 'required|integer']);
+        $user      = auth()->user();
+
+        abort_unless(in_array($user->role, ['bookkeeper', 'superadmin']), 403, 'Unauthorized.');
+
+        DividendRecord::where('year', $validated['year'])
+            ->where('status', DividendRecord::STATUS_TENTATIVE)
+            ->update([
+                'status'      => DividendRecord::STATUS_VERIFIED,
+                'verified_by' => $user->id,
+                'verified_at' => now(),
+            ]);
+
+        activity()->causedBy($user)
+            ->log('Dividend records for year ' . $validated['year'] . ' verified by ' . $user->name);
+
+        return back()->with('success', 'Dividends for ' . $validated['year'] . ' have been verified.');
+    }
+
+    public function releaseDividend(Request $request): RedirectResponse
+    {
+        $validated = $request->validate(['year' => 'required|integer']);
+        $user      = auth()->user();
+
+        abort_unless($user->role === 'superadmin', 403, 'Only superadmin can release dividends.');
+
+        DividendRecord::where('year', $validated['year'])
+            ->where('status', DividendRecord::STATUS_VERIFIED)
+            ->update([
+                'status'      => DividendRecord::STATUS_RELEASED,
+                'released_by' => $user->id,
+                'released_at' => now(),
+            ]);
+
+        activity()->causedBy($user)
+            ->log('Dividend records for year ' . $validated['year'] . ' released by ' . $user->name);
+
+        return back()->with('success', 'Dividends for ' . $validated['year'] . ' have been released.');
     }
 
     public function downloadDividendReports(Request $request): HttpResponse
     {
-        $year         = (int) $request->input('year', now()->year);
-        $totalCapital = (float) (Member::sum('share_capital') ?? 0);
-        $rows         = Member::whereNotIn('status', [Member::STATUS_PENDING, Member::STATUS_REJECTED])->get();
+        $year    = (int) $request->input('year', now()->year);
+        $records = DividendRecord::with(['member', 'verifiedBy', 'releasedBy'])
+            ->where('year', $year)
+            ->get();
 
-        $csv = implode(',', ['Member Name', 'Share Capital', 'Capital %', 'Dividend Amount', 'Year', 'Status']) . "\n";
-        foreach ($rows as $m) {
-            $pct = $totalCapital > 0 ? round(((float) $m->share_capital / $totalCapital) * 100, 2) : 0;
+        $csv = implode(',', ['Member Name', 'Share Capital', 'Capital %', 'Dividend Amount', 'Year', 'Status', 'Verified By', 'Verified At', 'Released By', 'Released At']) . "\n";
+        foreach ($records as $r) {
             $csv .= implode(',', [
-                '"' . $m->name . '"',
-                $m->share_capital,
-                $pct,
-                0,
-                $year,
-                'tentative',
+                '"' . ($r->member?->name ?? '') . '"',
+                $r->share_capital,
+                $r->capital_pct,
+                $r->dividend_amount,
+                $r->year,
+                $r->status,
+                '"' . ($r->verifiedBy?->name ?? '') . '"',
+                $r->verified_at?->format('Y-m-d H:i:s') ?? '',
+                '"' . ($r->releasedBy?->name ?? '') . '"',
+                $r->released_at?->format('Y-m-d H:i:s') ?? '',
             ]) . "\n";
         }
 
