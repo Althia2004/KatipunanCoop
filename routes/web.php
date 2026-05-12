@@ -47,8 +47,9 @@ Route::prefix('member')
     ->group(function () {
         Route::get('/dashboard',     [MemberPortalController::class, 'dashboard'])->name('member.dashboard');
         Route::get('/loans',         [MemberPortalController::class, 'loans'])->name('member.loans');
-        Route::get('/payments',      [MemberPortalController::class, 'payments'])->name('member.payments');
-        Route::post('/payments',     [MemberPortalController::class, 'storePayment'])->name('member.payments.store');
+        Route::get('/payments',          [MemberPortalController::class, 'payments'])->name('member.payments');
+        Route::post('/payments',         [MemberPortalController::class, 'storePayment'])->name('member.payments.store');
+        Route::post('/payments/online',  [MemberPortalController::class, 'submitOnlinePayment'])->name('member.payments.online');
         Route::get('/savings',       [MemberPortalController::class, 'savings'])->name('member.savings');
         Route::post('/savings/deposit',  [MemberPortalController::class, 'savingsDeposit'])->name('member.savings.deposit');
         Route::post('/savings/withdraw', [MemberPortalController::class, 'savingsWithdraw'])->name('member.savings.withdraw');
