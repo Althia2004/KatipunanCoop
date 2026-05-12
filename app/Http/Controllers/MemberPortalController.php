@@ -206,7 +206,7 @@ class MemberPortalController extends Controller
             ->sortByDesc('payment_date')
             ->values();
 
-        // Active loans for Make Payment dialog
+        // Active loans for Make Payment dialog (onsite)
         $activeLoans = Loan::where('member_id', $user->id)
             ->where('status', 'active')
             ->where('remaining_balance', '>', 0)
@@ -218,15 +218,33 @@ class MemberPortalController extends Controller
                 'principal_amount'  => (float) ($l->principal_amount ?? 0),
             ]);
 
+        // Active loans with pending amortizations for the online payment dialog
+        $activeLoansWithAmortizations = Loan::where('member_id', $user->id)
+            ->where('status', 'active')
+            ->where('remaining_balance', '>', 0)
+            ->with(['amortizations' => fn ($q) => $q->whereIn('status', ['pending', 'overdue'])->orderBy('due_date')])
+            ->get()
+            ->map(fn ($l) => [
+                'id'                => $l->id,
+                'remaining_balance' => (float) ($l->remaining_balance ?? 0),
+                'amortizations'     => $l->amortizations->map(fn ($a) => [
+                    'id'            => $a->id,
+                    'due_date'      => $a->due_date,
+                    'amount_to_pay' => (float) $a->amount_to_pay,
+                    'status'        => $a->status,
+                ])->values(),
+            ]);
+
         return inertia('member/Payments', [
             'member'   => [
                 'name'            => $member->name,
                 'savings_balance' => (float) ($member->savings_balance ?? 0),
                 'share_capital'   => (float) ($member->share_capital ?? 0),
             ],
-            'payments' => $allPayments,
-            'loans'    => $activeLoans,
-            'stats'    => [
+            'payments'    => $allPayments,
+            'loans'       => $activeLoans,
+            'activeLoans' => $activeLoansWithAmortizations,
+            'stats'       => [
                 'total_loan_paid'    => $loanPayments->sum('amount_paid'),
                 'total_capital_paid' => $capitalPayments->sum('amount_paid'),
                 'total_payments'     => $allPayments->count(),
@@ -234,6 +252,85 @@ class MemberPortalController extends Controller
             ],
             'user' => ['name' => $user->name, 'email' => $user->email],
         ]);
+    }
+
+    public function submitOnlinePayment(Request $request)
+    {
+        $validated = $request->validate([
+            'category'         => 'required|in:loan,capital_share',
+            'loan_id'          => 'required_if:category,loan|nullable|exists:loans,id',
+            'amortization_id'  => 'nullable|exists:loan_amortizations,id',
+            'amount'           => 'required|numeric|min:100',
+            'payment_method'   => 'required|in:GCash,Maya,BPI,Credit Card,Debit Card',
+            'reference_number' => 'required|string|max:100',
+            'payment_date'     => 'required|date|before_or_equal:today',
+        ]);
+
+        $member = $this->getMember();
+
+        if ($validated['category'] === 'capital_share') {
+            $newBalance = (float) ($member->share_capital ?? 0) + (float) $validated['amount'];
+
+            \App\Models\CapitalShareTransaction::create([
+                'member_id'     => $member->id,
+                'type'          => 'credit',
+                'amount'        => $validated['amount'],
+                'balance_after' => $newBalance,
+                'remarks'       => 'Online payment via ' . $validated['payment_method']
+                                   . ' — Ref: ' . $validated['reference_number'],
+                'recorded_by'   => auth()->id(),
+            ]);
+
+            $member->update(['share_capital' => $newBalance]);
+            $member->refresh()->checkAndUpgradeToRegular();
+        } else {
+            $loan = Loan::where('id', $validated['loan_id'])
+                ->where('member_id', auth()->id())
+                ->where('status', 'active')
+                ->firstOrFail();
+
+            \App\Models\LoanPayment::create([
+                'loan_id'          => $loan->id,
+                'amortization_id'  => $validated['amortization_id'] ?? null,
+                'amount_paid'      => $validated['amount'],
+                'payment_date'     => $validated['payment_date'],
+                'payment_method'   => $validated['payment_method'],
+                'payment_type'     => 'online',
+                'reference_number' => $validated['reference_number'],
+                'remarks'          => 'Online payment — Demo',
+                'recorded_by'      => auth()->id(),
+            ]);
+
+            $newBalance = max(0, (float) $loan->remaining_balance - (float) $validated['amount']);
+            $loan->update([
+                'remaining_balance' => $newBalance,
+                'status'            => $newBalance <= 0 ? 'fully_paid' : $loan->status,
+            ]);
+
+            // Mark the matched amortization as paid (either selected or next pending)
+            $amortizationId = $validated['amortization_id'] ?? null;
+            $amortization = $amortizationId
+                ? \App\Models\LoanAmortization::find($amortizationId)
+                : \App\Models\LoanAmortization::where('loan_id', $loan->id)
+                    ->whereIn('status', ['pending', 'overdue'])
+                    ->orderBy('due_date')
+                    ->first();
+
+            if ($amortization) {
+                $amortization->update(['status' => 'paid', 'paid_at' => now()]);
+            }
+        }
+
+        app(\App\Services\MigsScoreService::class)->recalculate($member);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log('Online payment submitted (demo): ₱' . number_format($validated['amount'], 2)
+                  . ' via ' . $validated['payment_method']);
+
+        return back()->with('success',
+            'Payment of ₱' . number_format($validated['amount'], 2)
+            . ' recorded successfully via ' . $validated['payment_method'] . '.');
     }
 
     public function storePayment(Request $request)
