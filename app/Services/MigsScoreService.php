@@ -111,7 +111,14 @@ class MigsScoreService
         $breakdown['has_overdue_payments'] = $hasOverdue;
         $breakdown['loan_points']          = $loanPoints;
         $totalScore += $loanPoints;
-
+        // ── Suspension Penalty ─────────────────────────────────────
+        // Suspended or pending-deletion members lose their loan-standing points
+        if (in_array($member->status, ['suspended', 'pending_deletion'])) {
+            $totalScore -= $loanPoints;
+            $loanPoints  = 0;
+            $breakdown['loan_points']        = 0;
+            $breakdown['suspension_penalty'] = true;
+        }
         // ── Final Result ─────────────────────────────────────────
         $finalScore     = min($totalScore, self::MAX_SCORE);
         $classification = $finalScore >= self::MIGS_THRESHOLD ? 'migs' : 'non_migs';

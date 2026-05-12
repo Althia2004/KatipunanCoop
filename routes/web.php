@@ -50,10 +50,14 @@ Route::prefix('superadmin')
         Route::patch('/approvals/registration/{memberRegistration}/reject', [SuperadminController::class, 'rejectRegistration'])->name('superadmin.approvals.registration.reject');
         Route::patch('/approvals/member/{member}/approve-deletion', [SuperadminController::class, 'approveDeletion'])->name('superadmin.approvals.member.approve-deletion');
         Route::patch('/approvals/member/{member}/reject-deletion', [SuperadminController::class, 'rejectDeletion'])->name('superadmin.approvals.member.reject-deletion');
+        Route::patch('/approvals/member/{member}/approve-archive', [SuperadminController::class, 'approveArchive'])->name('superadmin.approvals.member.approve-archive');
+        Route::patch('/approvals/member/{member}/reject-archive',  [SuperadminController::class, 'rejectArchive'])->name('superadmin.approvals.member.reject-archive');
+        Route::patch('/approvals/member/{member}/approve-restore', [SuperadminController::class, 'approveRestore'])->name('superadmin.approvals.member.approve-restore');
+        Route::patch('/approvals/member/{member}/reject-restore',  [SuperadminController::class, 'rejectRestore'])->name('superadmin.approvals.member.reject-restore');
         Route::get('/settings/interest', [SuperadminController::class, 'settings'])->name('superadmin.settings');
         Route::post('/settings', [SuperadminController::class, 'updateSettings'])->name('superadmin.settings.update');
         Route::get('/audit', [SuperadminController::class, 'audit'])->name('superadmin.audit');
-        Route::get('/reports/annual', [SuperadminController::class, 'annualReports'])->name('superadmin.reports.annual');
+        Route::get('/reports/annual', fn () => redirect('/reports/annual'))->name('superadmin.reports.annual');
         Route::post('/reports/annual', [SuperadminController::class, 'storeAnnualReport'])->name('superadmin.reports.annual.store');
         Route::get('/reports/annual/{meeting}/download', [SuperadminController::class, 'downloadAnnualReport'])->name('superadmin.reports.annual.download');
         Route::get('/reports/financial', [SuperadminController::class, 'financialReports'])->name('superadmin.reports.financial');
@@ -72,7 +76,7 @@ Route::prefix('superadmin')
         Route::get('/loan-requests', [SuperadminController::class, 'loanRequests'])->name('superadmin.loan-requests');
         Route::post('/loan-requests/{loanRequest}/approve', [SuperadminController::class, 'approveLoanRequest'])->name('superadmin.loan-requests.approve');
         Route::post('/loan-requests/{loanRequest}/reject',  [SuperadminController::class, 'rejectLoanRequest'])->name('superadmin.loan-requests.reject');
-        Route::inertia('/pending-approvals', 'Superadmin/PendingApprovals/PendingApprovalsPanel')
+        Route::get('/pending-approvals', [SuperadminController::class, 'pendingApprovals'])
             ->name('superadmin.pending-approvals');
         Route::get('/announcements', [SuperadminController::class, 'announcements'])->name('superadmin.announcements');
         Route::post('/announcements', [SuperadminController::class, 'storeAnnouncement'])->name('superadmin.announcements.store');
@@ -204,8 +208,12 @@ Route::middleware(['auth'])->group(function () {
         ->name('user.member-management.update');
     Route::patch('/user/member-management/{member}/toggle-status', [MemberController::class, 'toggleStatus'])
         ->name('user.member-management.toggle-status');
-    Route::patch('/user/member-management/{member}/request-deletion', [MemberController::class, 'requestDeletion'])
-        ->name('user.member-management.request-deletion');
+    Route::patch('/user/member-management/{member}/request-archive', [MemberController::class, 'requestArchive'])
+        ->name('user.member-management.request-archive');
+    Route::patch('/user/member-management/{member}/request-restore', [MemberController::class, 'requestRestore'])
+        ->name('user.member-management.request-restore');
+    Route::get('/user/archive-management', [MemberController::class, 'archiveManagement'])
+        ->name('user.archive-management');
     Route::patch('/user/member-management/{member}/migs-score', [MemberController::class, 'updateMigsScore'])
         ->name('user.member-management.migs-score');
     Route::post('/user/member-management/{member}/recalculate-migs', [MemberController::class, 'recalculateMigsScore'])

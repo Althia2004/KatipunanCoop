@@ -10,6 +10,7 @@ use App\Models\Seminar;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -112,15 +113,14 @@ class MemberRegistrationController extends Controller
     }
 
     /**
-     * Assign a seminar to a pending registration → status becomes "seminar_scheduled".
+     * Assign a seminar to a registration → status becomes "seminar_scheduled".
+     * Allows pending, approved, and previously scheduled registrations.
      */
     public function assignSeminar(AssignSeminarRequest $request, MemberRegistration $memberRegistration): RedirectResponse
     {
+        $blocked = [MemberRegistration::STATUS_REJECTED, MemberRegistration::STATUS_SEMINAR_ATTENDED];
         abort_if(
-            !in_array($memberRegistration->status, [
-                MemberRegistration::STATUS_PENDING,
-                MemberRegistration::STATUS_SEMINAR_SCHEDULED,
-            ]),
+            in_array($memberRegistration->status, $blocked),
             422,
             'Cannot assign seminar at this stage.'
         );
@@ -138,15 +138,30 @@ class MemberRegistrationController extends Controller
      */
     public function confirmAttendance(MemberRegistration $memberRegistration): RedirectResponse
     {
+        $allowed = [
+            MemberRegistration::STATUS_SEMINAR_SCHEDULED,
+            MemberRegistration::STATUS_PENDING,
+            MemberRegistration::STATUS_APPROVED,
+        ];
         abort_if(
-            $memberRegistration->status !== MemberRegistration::STATUS_SEMINAR_SCHEDULED,
+            !in_array($memberRegistration->status, $allowed),
             422,
-            'Attendance can only be confirmed for registrations with a scheduled seminar.'
+            'Cannot mark attendance. Current status: ' . $memberRegistration->status
         );
 
         $memberRegistration->markSeminarAttended();
 
-        return back()->with('message', 'Attendance confirmed. Awaiting superadmin approval.');
+        // Recalculate MIGS — seminar attendance adds points
+        $member = Member::where('member_registration_id', $memberRegistration->id)->first();
+        if ($member) {
+            app(\App\Services\MigsScoreService::class)->recalculate($member);
+        }
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($memberRegistration)
+            ->log('Seminar attendance confirmed for ' . $memberRegistration->first_name . ' ' . $memberRegistration->last_name);
+
+        return back()->with('message', $memberRegistration->first_name . ' ' . $memberRegistration->last_name . ' marked as attended.');
     }
 
     /**
@@ -162,7 +177,7 @@ class MemberRegistrationController extends Controller
         User::create([
             'name'              => trim("{$memberRegistration->first_name} {$memberRegistration->last_name}"),
             'email'             => $validated['email'],
-            'password'          => $validated['password'],
+            'password'          => Hash::make($validated['password']),
             'role'              => 'member',
             'email_verified_at' => now(),
         ]);

@@ -75,7 +75,10 @@ class MemberRegistration extends Model
 
     public function markSeminarAttended(): void
     {
-        $this->update(['status' => self::STATUS_SEMINAR_ATTENDED]);
+        $this->update([
+            'status'      => self::STATUS_SEMINAR_ATTENDED,
+            'attended_at' => now(),
+        ]);
     }
 
 }

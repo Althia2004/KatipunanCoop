@@ -15,13 +15,13 @@ import type { Auth } from '@/types';
 // ─── BOD data ────────────────────────────────────────────────────────────────
 
 const BOD_MEMBERS = [
-    { name: 'Blaine Cottrell',  role: 'Membership Approval Authority' },
-    { name: 'Cherish Kerr',     role: 'Mortuary/Death Benefits Overseer' },
-    { name: 'Beatrice Janelle', role: 'Financial & Dividend Analyst' },
-    { name: 'Eulalie Armel',    role: 'Loan Compliance & Vetting' },
-    { name: 'Esperanza Lodge',  role: 'Executive Oversight' },
-    { name: 'Zayn Hartley',     role: 'Transaction Auditor' },
-    { name: 'Laurent Wilma',    role: 'Policy & Rules Governance' },
+    { name: 'Delfin J. Delfin',  role: 'Chairman of the Board' },
+    { name: 'Alma M. Balon',     role: 'Vice Chairperson' },
+    { name: 'Anabella T. Madalo', role: 'Member of the Board' },
+    { name: 'Celsa R. Dioso',    role: 'Member of the Board' },
+    { name: 'Lilia Perez',  role: 'Member of the Board' },
+    { name: 'Rudy Porton',     role: 'Member of the Board' },
+    { name: 'Jimmy Flores',    role: 'Member of the Board' },
 ];
 
 function initials(name: string) {

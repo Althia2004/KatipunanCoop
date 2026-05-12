@@ -114,6 +114,7 @@ class LoanRequestController extends Controller
         $validated = $request->validate([
             'member_id'     => 'required|exists:members,id',
             'amount'        => 'required|numeric|min:1000',
+            'loan_type'     => 'required|in:regular,emergency,educational,livelihood,housing,agricultural',
             'purpose'       => 'required|string|max:255',
             'term_months'   => 'required|integer|min:1|max:120',
             'interest_rate' => 'required|numeric|min:0|max:100',
@@ -128,6 +129,7 @@ class LoanRequestController extends Controller
 
         $loanRequest = LoanRequest::create([
             'amount'        => $validated['amount'],
+            'loan_type'     => $validated['loan_type'],
             'purpose'       => $validated['purpose'],
             'term_months'   => $validated['term_months'],
             'interest_rate' => $validated['interest_rate'],

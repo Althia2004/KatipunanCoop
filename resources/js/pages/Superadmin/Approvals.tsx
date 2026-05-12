@@ -1,6 +1,6 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
-import { CheckCircle2, XCircle, ClipboardList, Users, Trash2 } from 'lucide-react';
+import { CheckCircle2, XCircle, ClipboardList, Users, Trash2, Archive, RotateCcw } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -30,10 +30,30 @@ interface PendingDeletion {
     priority: string;
 }
 
+interface PendingArchive {
+    id: number;
+    name: string;
+    reason: string | null;
+    requested_by: string;
+    requested_at: string | null;
+}
+
+interface PendingRestore {
+    id: number;
+    name: string;
+    reason: string | null;
+    requested_by: string;
+    requested_at: string | null;
+    archived_at: string | null;
+    archive_reason: string | null;
+}
+
 interface Props {
     pendingRegistrations: PendingRegistration[];
     pendingLoans: PendingLoan[];
     pendingDeletions: PendingDeletion[];
+    pendingArchives: PendingArchive[];
+    pendingRestores: PendingRestore[];
 }
 
 // ── Peso formatter ────────────────────────────────────────────────────────────
@@ -96,7 +116,7 @@ function ConfirmDialog({
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function Approvals({ pendingRegistrations, pendingLoans, pendingDeletions }: Props) {
+export default function Approvals({ pendingRegistrations, pendingLoans, pendingDeletions, pendingArchives, pendingRestores }: Props) {
     const { props } = usePage<{ flash?: { success?: string } }>();
     const flash = props.flash;
 
@@ -108,6 +128,18 @@ export default function Approvals({ pendingRegistrations, pendingLoans, pendingD
 
     const [deletionAction, setDeletionAction] = useState<{
         type: 'approve-deletion' | 'reject-deletion';
+        id: number;
+        name: string;
+    } | null>(null);
+
+    const [archiveAction, setArchiveAction] = useState<{
+        type: 'approve-archive' | 'reject-archive';
+        id: number;
+        name: string;
+    } | null>(null);
+
+    const [restoreAction, setRestoreAction] = useState<{
+        type: 'approve-restore' | 'reject-restore';
         id: number;
         name: string;
     } | null>(null);
@@ -143,7 +175,29 @@ export default function Approvals({ pendingRegistrations, pendingLoans, pendingD
         }
     };
 
-    const totalPending = pendingRegistrations.length + pendingLoans.length + pendingDeletions.length;
+    const doArchiveAction = () => {
+        if (!archiveAction) return;
+        const { type, id } = archiveAction;
+        setArchiveAction(null);
+        if (type === 'approve-archive') {
+            router.patch(`/superadmin/approvals/member/${id}/approve-archive`);
+        } else {
+            router.patch(`/superadmin/approvals/member/${id}/reject-archive`);
+        }
+    };
+
+    const doRestoreAction = () => {
+        if (!restoreAction) return;
+        const { type, id } = restoreAction;
+        setRestoreAction(null);
+        if (type === 'approve-restore') {
+            router.patch(`/superadmin/approvals/member/${id}/approve-restore`);
+        } else {
+            router.patch(`/superadmin/approvals/member/${id}/reject-restore`);
+        }
+    };
+
+    const totalPending = pendingRegistrations.length + pendingLoans.length + pendingDeletions.length + pendingArchives.length + pendingRestores.length;
 
     return (
         <>
@@ -187,6 +241,46 @@ export default function Approvals({ pendingRegistrations, pendingLoans, pendingD
                     }
                     onConfirm={doDeletionAction}
                     onCancel={() => setDeletionAction(null)}
+                />
+            )}
+
+            {/* Archive Confirm Dialog */}
+            {archiveAction && (
+                <ConfirmDialog
+                    title={archiveAction.type === 'approve-archive' ? 'Approve Archive Request' : 'Reject Archive Request'}
+                    message={
+                        archiveAction.type === 'approve-archive'
+                            ? `Approve archiving ${archiveAction.name}? The member's account will be disabled and moved to the archive.`
+                            : `Reject the archive request for ${archiveAction.name}? The member will remain active.`
+                    }
+                    confirmLabel={archiveAction.type === 'approve-archive' ? 'Approve Archive' : 'Reject Request'}
+                    confirmClass={
+                        archiveAction.type === 'approve-archive'
+                            ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                            : 'bg-zinc-700 hover:bg-zinc-800 text-white'
+                    }
+                    onConfirm={doArchiveAction}
+                    onCancel={() => setArchiveAction(null)}
+                />
+            )}
+
+            {/* Restore Confirm Dialog */}
+            {restoreAction && (
+                <ConfirmDialog
+                    title={restoreAction.type === 'approve-restore' ? 'Approve Restore Request' : 'Reject Restore Request'}
+                    message={
+                        restoreAction.type === 'approve-restore'
+                            ? `Approve restoring ${restoreAction.name} to active status? Their account will be re-enabled.`
+                            : `Reject the restore request for ${restoreAction.name}? The member will remain archived.`
+                    }
+                    confirmLabel={restoreAction.type === 'approve-restore' ? 'Approve Restore' : 'Reject Request'}
+                    confirmClass={
+                        restoreAction.type === 'approve-restore'
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                            : 'bg-zinc-700 hover:bg-zinc-800 text-white'
+                    }
+                    onConfirm={doRestoreAction}
+                    onCancel={() => setRestoreAction(null)}
                 />
             )}
 
@@ -386,6 +480,142 @@ export default function Approvals({ pendingRegistrations, pendingLoans, pendingD
                                                             size="sm"
                                                             variant="outline"
                                                             onClick={() => setDeletionAction({ type: 'reject-deletion', id: d.id, name: d.name })}
+                                                            className="h-7 px-3 border-zinc-300 text-zinc-600 hover:bg-zinc-50 text-xs"
+                                                        >
+                                                            Reject
+                                                        </Button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* ── Pending Archive Requests ── */}
+                <Card className="border border-amber-200 shadow-sm">
+                    <CardHeader className="pb-3">
+                        <div className="flex items-center gap-2">
+                            <Archive className="w-4 h-4 text-amber-500" />
+                            <h2 className="text-base font-semibold text-zinc-900">
+                                Pending Archive Requests
+                                {pendingArchives.length > 0 && (
+                                    <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                        {pendingArchives.length}
+                                    </span>
+                                )}
+                            </h2>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        {pendingArchives.length === 0 ? (
+                            <div className="flex items-center justify-center py-8 text-zinc-400 text-sm">
+                                No pending archive requests ✅
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b border-amber-100 bg-amber-50">
+                                            <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Member</th>
+                                            <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Reason</th>
+                                            <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Requested By</th>
+                                            <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Date</th>
+                                            <th className="text-right px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-amber-50">
+                                        {pendingArchives.map((a) => (
+                                            <tr key={a.id} className="hover:bg-amber-50 transition">
+                                                <td className="px-4 py-3 font-medium text-zinc-800">{a.name}</td>
+                                                <td className="px-4 py-3 text-zinc-500 text-xs max-w-48 truncate" title={a.reason ?? ''}>{a.reason ?? '—'}</td>
+                                                <td className="px-4 py-3 text-zinc-500 text-xs">{a.requested_by}</td>
+                                                <td className="px-4 py-3 text-zinc-400 text-xs">{a.requested_at ?? '—'}</td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => setArchiveAction({ type: 'approve-archive', id: a.id, name: a.name })}
+                                                            className="h-7 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs gap-1"
+                                                        >
+                                                            <Archive className="w-3.5 h-3.5" /> Approve Archive
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => setArchiveAction({ type: 'reject-archive', id: a.id, name: a.name })}
+                                                            className="h-7 px-3 border-zinc-300 text-zinc-600 hover:bg-zinc-50 text-xs"
+                                                        >
+                                                            Reject
+                                                        </Button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* ── Pending Restore Requests ── */}
+                <Card className="border border-blue-200 shadow-sm">
+                    <CardHeader className="pb-3">
+                        <div className="flex items-center gap-2">
+                            <RotateCcw className="w-4 h-4 text-blue-500" />
+                            <h2 className="text-base font-semibold text-zinc-900">
+                                Pending Restore Requests
+                                {pendingRestores.length > 0 && (
+                                    <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                                        {pendingRestores.length}
+                                    </span>
+                                )}
+                            </h2>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        {pendingRestores.length === 0 ? (
+                            <div className="flex items-center justify-center py-8 text-zinc-400 text-sm">
+                                No pending restore requests ✅
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b border-blue-100 bg-blue-50">
+                                            <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Member</th>
+                                            <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Restore Reason</th>
+                                            <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Archived On</th>
+                                            <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Requested By</th>
+                                            <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Date</th>
+                                            <th className="text-right px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-blue-50">
+                                        {pendingRestores.map((r) => (
+                                            <tr key={r.id} className="hover:bg-blue-50 transition">
+                                                <td className="px-4 py-3 font-medium text-zinc-800">{r.name}</td>
+                                                <td className="px-4 py-3 text-zinc-500 text-xs max-w-40 truncate" title={r.reason ?? ''}>{r.reason ?? '—'}</td>
+                                                <td className="px-4 py-3 text-zinc-400 text-xs">{r.archived_at ?? '—'}</td>
+                                                <td className="px-4 py-3 text-zinc-500 text-xs">{r.requested_by}</td>
+                                                <td className="px-4 py-3 text-zinc-400 text-xs">{r.requested_at ?? '—'}</td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => setRestoreAction({ type: 'approve-restore', id: r.id, name: r.name })}
+                                                            className="h-7 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1"
+                                                        >
+                                                            <CheckCircle2 className="w-3.5 h-3.5" /> Approve Restore
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => setRestoreAction({ type: 'reject-restore', id: r.id, name: r.name })}
                                                             className="h-7 px-3 border-zinc-300 text-zinc-600 hover:bg-zinc-50 text-xs"
                                                         >
                                                             Reject

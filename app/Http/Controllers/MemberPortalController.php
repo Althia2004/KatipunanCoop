@@ -99,6 +99,15 @@ class MemberPortalController extends Controller
             'next_due'        => $nextDue,
             'recent_payments' => $recentPayments,
             'user'            => ['name' => $user->name, 'email' => $user->email],
+            'capitalShareProgress' => [
+                'share_capital'                   => (float) ($member->share_capital ?? 0),
+                'capital_share_target'             => (float) ($member->capital_share_target ?? 10000),
+                'capital_share_remaining'          => (float) $member->capital_share_remaining,
+                'capital_share_progress'           => (float) $member->capital_share_progress,
+                'capital_share_subscription_date'  => $member->capital_share_subscription_date?->format('M d, Y'),
+                'capital_share_payment_frequency'  => $member->capital_share_payment_frequency,
+                'is_regular'                       => $member->status === \App\Models\Member::STATUS_REGULAR,
+            ],
         ]);
     }
 
@@ -117,19 +126,19 @@ class MemberPortalController extends Controller
             ->map(fn ($loan) => [
                 'id'                => $loan->id,
                 'principal_amount'  => (float) $loan->principal_amount,
-                'term_months'       => $loan->term_months,
-                'interest_rate'     => (float) $loan->interest_rate,
-                'total_payable'     => (float) $loan->total_payable,
-                'remaining_balance' => (float) $loan->remaining_balance,
+                'term_months'       => (int) ($loan->term_months ?? 12),
+                'interest_rate'     => (float) ($loan->interest_rate ?? 0),
+                'total_payable'     => (float) ($loan->total_payable ?? $loan->principal_amount),
+                'remaining_balance' => (float) ($loan->remaining_balance ?? $loan->principal_amount),
                 'status'            => $loan->status,
                 'created_at'        => $loan->created_at->format('M d, Y'),
                 'amortizations'     => $loan->amortizations->map(fn ($a) => [
                     'id'            => $a->id,
                     'due_date'      => \Carbon\Carbon::parse($a->due_date)->format('M d, Y'),
-                    'amount_to_pay' => (float) $a->amount_to_pay,
-                    'principal_part'=> (float) $a->principal_part,
-                    'interest_part' => (float) $a->interest_part,
-                    'status'        => $a->status,
+                    'amount_to_pay' => (float) ($a->amount_to_pay ?? 0),
+                    'principal_part'=> (float) ($a->principal_part ?? 0),
+                    'interest_part' => (float) ($a->interest_part ?? 0),
+                    'status'        => $a->status ?? 'pending',
                     'total_paid'    => (float) $a->payments->sum('amount_paid'),
                 ])->values(),
             ]);
@@ -137,7 +146,7 @@ class MemberPortalController extends Controller
         return inertia('member/Loans', [
             'loans'  => $loans,
             'member' => ['name' => $member->name],
-            'user'   => ['name' => $user->name],
+            'user'   => ['name' => $user->name, 'email' => $user->email],
         ]);
     }
 
@@ -253,7 +262,30 @@ class MemberPortalController extends Controller
             'recorded_by'      => auth()->id(),
         ]);
 
-        $loan->decrement('remaining_balance', $validated['amount']);
+        $newBalance = max(0, ((float) $loan->remaining_balance) - ((float) $validated['amount']));
+        $loan->update([
+            'remaining_balance' => $newBalance,
+            'status'            => $newBalance <= 0 ? 'fully_paid' : $loan->status,
+        ]);
+
+        // Mark the next pending/overdue amortization as paid
+        $nextAmortization = \App\Models\LoanAmortization::where('loan_id', $loan->id)
+            ->whereIn('status', ['pending', 'overdue'])
+            ->orderBy('due_date')
+            ->first();
+
+        if ($nextAmortization) {
+            $nextAmortization->update([
+                'status'  => 'paid',
+                'paid_at' => now(),
+            ]);
+        }
+
+        // Recalculate MIGS — good loan standing points depend on amortization status
+        $member = $this->getMember();
+        if ($member) {
+            app(\App\Services\MigsScoreService::class)->recalculate($member);
+        }
 
         activity()->causedBy(auth()->user())
             ->performedOn($loan)

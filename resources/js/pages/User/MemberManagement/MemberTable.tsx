@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, Edit, Lock, LockOpen, Trash2 } from 'lucide-react';
+import { Eye, Edit, Lock, LockOpen, Archive } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 
 export interface Member {
@@ -12,7 +12,7 @@ export interface Member {
     date_of_birth: string | null;
     address: string;
     gender: string;
-    status: 'pending' | 'approved' | 'rejected' | 'active' | 'suspended' | 'pending_deletion';
+    status: 'pending' | 'approved' | 'rejected' | 'active' | 'suspended' | 'pending_deletion' | 'archived' | 'pending_archive' | 'pending_restore';
     membership_status: 'good' | 'warning' | 'non-compliant';
     standing: string;
     start_date: string | null;
@@ -22,6 +22,13 @@ export interface Member {
     share_capital: number;
     savings_balance: number;
     copra_sales_ytd: number;
+    is_archived: boolean;
+    archived_at: string | null;
+    archive_reason: string | null;
+    archive_year: number | null;
+    archived_by_name: string | null;
+    archive_requested?: boolean;
+    restore_requested?: boolean;
     loans: {
         id: number;
         principal_amount: number;
@@ -70,7 +77,7 @@ export default function MemberTable({
     if (members.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-300 bg-zinc-50 py-12">
-                <p className="text-sm text-zinc-500">No approved members found</p>
+                <p className="text-sm text-zinc-500">No members found matching your filters.</p>
             </div>
         );
     }
@@ -94,7 +101,10 @@ export default function MemberTable({
                     {members.map((member) => (
                         <tr
                             key={member.id}
-                            className={`border-b border-zinc-200 hover:bg-zinc-50 ${member.status === 'pending_deletion' ? 'bg-amber-50/40' : ''}`}
+                            className={`border-b border-zinc-200 hover:bg-zinc-50 ${
+                                member.is_archived ? 'bg-zinc-50/80 opacity-70' :
+                                member.status === 'pending_deletion' ? 'bg-amber-50/40' : ''
+                            }`}
                         >
                             <td className="px-6 py-4 text-sm text-zinc-900">#{member.id}</td>
                             <td className="px-6 py-4 text-sm font-medium text-zinc-900">{member.name}</td>
@@ -118,8 +128,8 @@ export default function MemberTable({
                                         <Eye className="h-4 w-4" />
                                     </button>
 
-                                    {/* Edit — disabled while pending deletion */}
-                                    {member.status !== 'pending_deletion' && (
+                                    {/* Edit — disabled for archived */}
+                                    {!member.is_archived && member.status !== 'pending_deletion' && (
                                         <button
                                             onClick={() => onEdit(member)}
                                             className="rounded-lg p-2 text-zinc-600 hover:bg-amber-50 hover:text-amber-600 transition"
@@ -129,8 +139,8 @@ export default function MemberTable({
                                         </button>
                                     )}
 
-                                    {/* Lock / Unlock — disabled while pending deletion */}
-                                    {member.status !== 'pending_deletion' && (
+                                    {/* Lock / Unlock — disabled for archived */}
+                                    {!member.is_archived && member.status !== 'pending_deletion' && (
                                         <button
                                             onClick={() => onLock(member)}
                                             className={`rounded-lg p-2 transition ${
@@ -148,18 +158,18 @@ export default function MemberTable({
                                         </button>
                                     )}
 
-                                    {/* Delete / Pending Deletion badge */}
-                                    {member.status === 'pending_deletion' ? (
-                                        <span className="text-xs text-amber-600 font-medium px-2 py-0.5 bg-amber-100 rounded-full whitespace-nowrap">
-                                            Pending Deletion
+                                    {/* Archive button / Archived badge */}
+                                    {member.is_archived ? (
+                                        <span className="text-xs text-zinc-500 font-medium px-2 py-0.5 bg-zinc-200 rounded-full whitespace-nowrap">
+                                            Archived
                                         </span>
                                     ) : (
                                         <button
                                             onClick={() => onDelete(member)}
                                             className="rounded-lg p-2 text-zinc-400 hover:bg-red-50 hover:text-red-600 transition"
-                                            title="Request Deletion"
+                                            title="Archive Member"
                                         >
-                                            <Trash2 className="h-4 w-4" />
+                                            <Archive className="h-4 w-4" />
                                         </button>
                                     )}
                                 </div>

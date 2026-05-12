@@ -29,7 +29,7 @@ export default function MemberLayout({ user, children, title }: Props) {
         router.post('/member/logout');
     }
 
-    const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
+    const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => (
         <aside className={
             mobile
                 ? 'flex flex-col h-full bg-[#2d5a27] w-72'
@@ -93,50 +93,56 @@ export default function MemberLayout({ user, children, title }: Props) {
             </div>
         </aside>
     );
-
     return (
-        <div className="min-h-screen bg-[#f5f0e8] flex">
-            {/* Desktop Sidebar */}
-            <Sidebar />
+    
+        <div className="min-h-screen bg-zinc-50">
 
-            {/* Mobile sidebar overlay */}
+            {/* Desktop Sidebar — fixed */}
+            <SidebarContent />
+
+            {/* Mobile overlay */}
             {open && (
                 <div className="lg:hidden fixed inset-0 z-40 flex">
-                    <div
-                        className="fixed inset-0 bg-black/50"
-                        onClick={() => setOpen(false)}
-                    />
+                    <div className="fixed inset-0 bg-black/50" onClick={() => setOpen(false)} />
                     <div className="relative z-50">
-                        <Sidebar mobile />
+                        <SidebarContent mobile />
                     </div>
                 </div>
             )}
 
-            {/* Main content */}
-            <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
-                {/* Mobile header */}
-                <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-[#2d5a27] border-b border-white/10">
-                    <div className="flex items-center gap-3">
-                        <img
-                            src="/images/Sample - Logo(KSCF MPC).png"
-                            alt="KSCFMPC"
-                            className="w-7 h-7 rounded-full object-cover border border-white/30"
-                        />
-                        <span className="text-white font-bold text-sm">{title ?? 'Member Portal'}</span>
-                    </div>
-                    <button
-                        onClick={() => setOpen(!open)}
-                        className="text-white/80 hover:text-white p-1"
-                    >
-                        {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-                    </button>
-                </header>
+            {/* Mobile header */}
+            <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-[#2d5a27] border-b border-white/10 sticky top-0 z-20">
+                <div className="flex items-center gap-3">
+                    <img
+                        src="/images/Sample - Logo(KSCF MPC).png"
+                        alt="KSCFMPC"
+                        className="w-7 h-7 rounded-full object-cover border border-white/30"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                    <span className="text-white font-bold text-sm">{title ?? 'Member Portal'}</span>
+                </div>
+                <button
+                    onClick={() => setOpen(!open)}
+                    className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition"
+                >
+                    {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                </button>
+            </header>
 
-                {/* Page content */}
-                <main className="flex-1 p-4 lg:p-6 overflow-y-auto">
-                    {children}
-                </main>
-            </div>
+            {/* Main content — ml-64 reserves sidebar space, fills remaining width */}
+            <div className="lg:ml-64 min-h-screen flex flex-col">
+        <main className="flex-1 p-6 lg:px-10 lg:py-8">
+        <div className="mx-auto max-w-5xl w-full">
+            {children}
+        </div>
+     </main>
+     <footer className="px-6 py-3 border-t border-zinc-200 bg-white">
+        <p className="text-xs text-zinc-400 text-center">
+            © {new Date().getFullYear()} Katipunan Small Coconut Farmers MPC · Katipunan, Davao del Norte
+        </p>
+         </footer>
+        </div>
+
         </div>
     );
 }

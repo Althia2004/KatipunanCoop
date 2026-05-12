@@ -1,6 +1,6 @@
 import { Head } from '@inertiajs/react';
 import {
-    CreditCard, PiggyBank, Leaf, TrendingDown, AlertCircle, CheckCircle2,
+    CreditCard, PiggyBank, Leaf, TrendingDown, AlertCircle, CheckCircle2, TrendingUp,
 } from 'lucide-react';
 import MemberLayout from '@/layouts/MemberLayout';
 
@@ -36,12 +36,21 @@ interface Props {
     };
     next_due: NextDue | null;
     recent_payments: Payment[];
+    capitalShareProgress: {
+        share_capital: number;
+        capital_share_target: number;
+        capital_share_remaining: number;
+        capital_share_progress: number;
+        capital_share_subscription_date: string | null;
+        capital_share_payment_frequency: string | null;
+        is_regular: boolean;
+    };
 }
 
 const fmt = (n: number) =>
     '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function MemberDashboard({ user, member, stats, next_due, recent_payments }: Props) {
+export default function MemberDashboard({ user, member, stats, next_due, recent_payments, capitalShareProgress }: Props) {
     const isMigs = member.classification === 'migs';
     const greeting = () => {
         const h = new Date().getHours();
@@ -150,12 +159,49 @@ export default function MemberDashboard({ user, member, stats, next_due, recent_
 
                     {/* Capital Share */}
                     <div className="bg-white rounded-xl border border-zinc-100 shadow-sm p-5">
-                        <p className="text-sm font-semibold text-zinc-700 mb-3">Capital Share</p>
-                        <p className="text-3xl font-black text-[#c8920a]">{fmt(member.share_capital)}</p>
-                        <p className="text-xs text-zinc-400 mt-1">Your total capital contribution</p>
-                        <div className="mt-4 pt-4 border-t border-zinc-50">
-                            <p className="text-xs text-zinc-500">Total Paid</p>
-                            <p className="text-sm font-bold text-zinc-700 mt-0.5">{fmt(stats.total_paid)}</p>
+                        <div className="flex items-center justify-between mb-3">
+                            <p className="text-sm font-semibold text-zinc-700">Capital Share</p>
+                            {capitalShareProgress.is_regular ? (
+                                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">Regular Member</span>
+                            ) : (
+                                <TrendingUp className="w-4 h-4 text-[#c8920a]" />
+                            )}
+                        </div>
+
+                        {capitalShareProgress.is_regular ? (
+                            <>
+                                <p className="text-3xl font-black text-[#c8920a]">{fmt(capitalShareProgress.share_capital)}</p>
+                                <p className="text-xs text-emerald-600 font-semibold mt-1">Target reached — fully subscribed</p>
+                            </>
+                        ) : (
+                            <>
+                                <div className="flex items-end justify-between mb-1">
+                                    <p className="text-2xl font-black text-[#c8920a]">{fmt(capitalShareProgress.share_capital)}</p>
+                                    <p className="text-xs text-zinc-400">{capitalShareProgress.capital_share_progress.toFixed(1)}%</p>
+                                </div>
+                                <div className="w-full h-2 bg-zinc-100 rounded-full overflow-hidden mb-1">
+                                    <div
+                                        className="h-full rounded-full bg-[#c8920a] transition-all"
+                                        style={{ width: `${capitalShareProgress.capital_share_progress}%` }}
+                                    />
+                                </div>
+                                <p className="text-xs text-zinc-400">
+                                    {fmt(capitalShareProgress.capital_share_remaining)} remaining of {fmt(capitalShareProgress.capital_share_target)} target
+                                </p>
+                            </>
+                        )}
+
+                        <div className="mt-4 pt-3 border-t border-zinc-50 space-y-1">
+                            {capitalShareProgress.capital_share_payment_frequency && (
+                                <p className="text-xs text-zinc-500">
+                                    Frequency: <span className="font-semibold capitalize">{capitalShareProgress.capital_share_payment_frequency.replace('_', ' ')}</span>
+                                </p>
+                            )}
+                            {capitalShareProgress.capital_share_subscription_date && (
+                                <p className="text-xs text-zinc-500">
+                                    Since: <span className="font-semibold">{capitalShareProgress.capital_share_subscription_date}</span>
+                                </p>
+                            )}
                         </div>
                     </div>
                 </div>

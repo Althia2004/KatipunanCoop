@@ -129,59 +129,120 @@ class MemberController extends Controller
     // ── Inertia page ──────────────────────────────────────────────────────────
 
     /**
-     * Render the Member Management Inertia page with member data as props.
+     * Render the Member Management Inertia page with server-side filters.
      */
-    public function memberManagement(): Response
+    public function memberManagement(Request $request): Response
     {
-        $members = Member::whereNotIn('status', [Member::STATUS_PENDING, Member::STATUS_REJECTED])
-            ->with('memberRegistration:id,first_name,last_name,contact_number,source_of_income,date_of_birth,address_street,address_barangay,address_city,gender')
-            ->latest()
-            ->get()
-            ->map(fn ($m) => [
-                'id'                  => $m->id,
-                'name'                => $m->name,
-                'first_name'          => $m->memberRegistration?->first_name ?? '',
-                'last_name'           => $m->memberRegistration?->last_name ?? '',
-                'contact_number'      => $m->memberRegistration?->contact_number ?? '',
-                'source_of_income'    => $m->memberRegistration?->source_of_income ?? '',
-                'date_of_birth'       => $m->memberRegistration?->date_of_birth?->format('M d, Y') ?? null,
-                'address'             => $m->memberRegistration
-                    ? trim(implode(', ', array_filter([
-                        $m->memberRegistration->address_street,
-                        $m->memberRegistration->address_barangay,
-                        $m->memberRegistration->address_city,
-                    ])))
-                    : '',
-                'gender'              => $m->memberRegistration?->gender ?? $m->gender ?? '—',
-                'status'              => $m->status,
-                'membership_status'   => $m->membership_status,
-                'standing'            => $m->standing,
-                'start_date'          => $m->start_date?->format('M d, Y'),
-                'last_login'          => $m->last_login?->format('M d, Y g:i A'),
+        $search       = $request->input('search', '');
+        $statusFilter = $request->input('status', '');
+        $standing     = $request->input('standing', '');
+        $gender       = $request->input('gender', '');
+        $migs         = $request->input('migs', '');
+        $showArchived = $request->boolean('archived', false);
+        $archiveYear  = $request->input('archive_year', '');
 
-                // ── Real-time financial data ──
-                'migs_score'          => (int) ($m->migs_score ?? 0),
-                'migs_classification' => $m->migs_classification ?? 'non_migs',
-                'share_capital'       => (float) ($m->share_capital ?? 0),
-                'savings_balance'     => (float) ($m->savings_balance ?? 0),
-                'copra_sales_ytd'     => (float) ($m->copra_sales_ytd ?? 0),
+        $query = Member::with('memberRegistration:id,first_name,last_name,contact_number,source_of_income,date_of_birth,address_street,address_barangay,address_city,gender')
+            ->latest();
 
-                // ── Loan history ──
-                'loans' => Loan::where('member_id', $m->user_id ?? 0)
-                    ->select('id', 'principal_amount', 'remaining_balance', 'status', 'created_at')
-                    ->latest()
-                    ->get()
-                    ->map(fn ($l) => [
-                        'id'                => $l->id,
-                        'principal_amount'  => (float) $l->principal_amount,
-                        'remaining_balance' => (float) $l->remaining_balance,
-                        'status'            => $l->status,
-                        'created_at'        => $l->created_at->format('M d, Y'),
-                    ]),
-            ]);
+        if ($showArchived) {
+            $query->archived();
+            if ($archiveYear) {
+                $query->archivedYear((int) $archiveYear);
+            }
+        } else {
+            $query->notArchived()
+                ->whereNotIn('status', [Member::STATUS_PENDING, Member::STATUS_REJECTED]);
+        }
+
+        if ($statusFilter && $statusFilter !== 'all') {
+            $query->where('status', $statusFilter);
+        }
+
+        if ($standing && $standing !== 'all') {
+            $query->where('standing', $standing);
+        }
+
+        if ($gender && $gender !== 'all') {
+            $query->where('gender', $gender);
+        }
+
+        if ($migs === 'migs') {
+            $query->where('migs_classification', 'migs');
+        } elseif ($migs === 'non_migs') {
+            $query->where('migs_classification', 'non_migs');
+        }
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('id', $search);
+            });
+        }
+
+        $members = $query->get()->map(fn ($m) => [
+            'id'                  => $m->id,
+            'name'                => $m->name,
+            'first_name'          => $m->memberRegistration?->first_name ?? '',
+            'last_name'           => $m->memberRegistration?->last_name ?? '',
+            'contact_number'      => $m->memberRegistration?->contact_number ?? '',
+            'source_of_income'    => $m->memberRegistration?->source_of_income ?? '',
+            'date_of_birth'       => $m->memberRegistration?->date_of_birth?->format('M d, Y') ?? null,
+            'address'             => $m->memberRegistration
+                ? trim(implode(', ', array_filter([
+                    $m->memberRegistration->address_street,
+                    $m->memberRegistration->address_barangay,
+                    $m->memberRegistration->address_city,
+                ])))
+                : '',
+            'gender'              => $m->memberRegistration?->gender ?? $m->gender ?? '—',
+            'status'              => $m->status,
+            'membership_status'   => $m->membership_status,
+            'standing'            => $m->standing,
+            'start_date'          => $m->start_date?->format('M d, Y'),
+            'last_login'          => $m->last_login?->format('M d, Y g:i A'),
+            'migs_score'          => (int) ($m->migs_score ?? 0),
+            'migs_classification' => $m->migs_classification ?? 'non_migs',
+            'share_capital'       => (float) ($m->share_capital ?? 0),
+            'savings_balance'     => (float) ($m->savings_balance ?? 0),
+            'copra_sales_ytd'     => (float) ($m->copra_sales_ytd ?? 0),
+            'is_archived'         => (bool) $m->is_archived,
+            'archived_at'         => $m->archived_at?->format('M d, Y'),
+            'archive_reason'      => $m->archive_reason,
+            'archive_year'        => $m->archive_year,
+            'archived_by_name'    => $m->archivedBy?->name ?? null,
+            'loans' => Loan::where('member_id', $m->user_id ?? 0)
+                ->select('id', 'principal_amount', 'remaining_balance', 'status', 'created_at')
+                ->latest()
+                ->get()
+                ->map(fn ($l) => [
+                    'id'                => $l->id,
+                    'principal_amount'  => (float) $l->principal_amount,
+                    'remaining_balance' => (float) $l->remaining_balance,
+                    'status'            => $l->status,
+                    'created_at'        => $l->created_at->format('M d, Y'),
+                ]),
+        ]);
+
+        $stats = [
+            'total'        => Member::notArchived()->whereNotIn('status', [Member::STATUS_PENDING, Member::STATUS_REJECTED])->count(),
+            'migs'         => Member::notArchived()->where('migs_classification', 'migs')->count(),
+            'non_migs'     => Member::notArchived()->where('migs_classification', 'non_migs')->whereNotIn('status', [Member::STATUS_PENDING, Member::STATUS_REJECTED])->count(),
+            'archived'     => Member::archived()->count(),
+            'archive_years' => Member::archived()->selectRaw('archive_year')->distinct()->orderBy('archive_year', 'desc')->pluck('archive_year')->filter()->values(),
+        ];
 
         return Inertia::render('User/MemberManagement', [
             'members' => $members->values(),
+            'stats'   => $stats,
+            'filters' => [
+                'search'       => $search,
+                'status'       => $statusFilter,
+                'standing'     => $standing,
+                'gender'       => $gender,
+                'migs'         => $migs,
+                'archived'     => $showArchived,
+                'archive_year' => $archiveYear,
+            ],
         ]);
     }
 
@@ -252,9 +313,9 @@ class MemberController extends Controller
      */
     public function toggleStatus(Member $member): RedirectResponse
     {
-        $newStatus = $member->status === Member::STATUS_SUSPENDED
-            ? Member::STATUS_ACTIVE
-            : Member::STATUS_SUSPENDED;
+        $newStatus = $member->status === Member::STATUS_INACTIVE
+            ? Member::STATUS_MEMBER
+            : Member::STATUS_INACTIVE;
 
         $member->update(['status' => $newStatus]);
 
@@ -266,19 +327,118 @@ class MemberController extends Controller
     }
 
     /**
-     * Request member deletion — sets status to pending_deletion (Inertia PATCH).
+     * Submit an archive request (requires superadmin approval).
      */
-    public function requestDeletion(Member $member): RedirectResponse
+    public function requestArchive(Request $request, Member $member): RedirectResponse
     {
-        abort_if($member->status === Member::STATUS_PENDING_DELETION, 422, 'Deletion already requested.');
+        abort_if($member->is_archived, 422, 'Member is already archived.');
+        abort_if($member->archive_requested, 422, 'An archive request is already pending for this member.');
 
-        $member->update(['status' => Member::STATUS_PENDING_DELETION]);
+        $validated = $request->validate([
+            'archive_reason' => 'required|string|min:10|max:500',
+        ]);
+
+        $member->requestArchive($validated['archive_reason'], auth()->id());
 
         activity()->causedBy(auth()->user())
             ->performedOn($member)
-            ->log('Member deletion requested — awaiting superadmin approval');
+            ->log('Archive requested for member: ' . $member->name . ' — ' . $validated['archive_reason']);
 
-        return back()->with('success', 'Deletion request submitted. Awaiting Superadmin approval.');
+        return back()->with('success', 'Archive request submitted for ' . $member->name . '. Awaiting superadmin approval.');
+    }
+
+    /**
+     * Submit a restore request for an archived member (requires superadmin approval).
+     */
+    public function requestRestore(Request $request, Member $member): RedirectResponse
+    {
+        abort_unless($member->is_archived, 422, 'Member is not archived.');
+        abort_if($member->restore_requested, 422, 'A restore request is already pending for this member.');
+
+        $validated = $request->validate([
+            'restore_reason' => 'required|string|min:10|max:500',
+        ]);
+
+        $member->requestRestore($validated['restore_reason'], auth()->id());
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log('Restore requested for member: ' . $member->name . ' — ' . $validated['restore_reason']);
+
+        return back()->with('success', 'Restore request submitted for ' . $member->name . '. Awaiting superadmin approval.');
+    }
+
+    /**
+     * Archive Management page — view all archived members, submit restore requests.
+     */
+    public function archiveManagement(Request $request): Response
+    {
+        $search     = $request->input('search', '');
+        $archiveYear = $request->input('archive_year', '');
+        $standing   = $request->input('standing', '');
+        $gender     = $request->input('gender', '');
+
+        $query = Member::where('is_archived', true)
+            ->with(['archiveRequestedBy:id,name', 'restoreRequestedBy:id,name', 'archivedBy:id,name']);
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('contact_number', 'like', "%{$search}%");
+            });
+        }
+        if ($archiveYear) {
+            $query->where('archive_year', $archiveYear);
+        }
+        if ($standing) {
+            $query->where('standing', $standing);
+        }
+        if ($gender) {
+            $query->where('gender', $gender);
+        }
+
+        $members = $query->latest('archived_at')->get()->map(fn ($m) => [
+            'id'                     => $m->id,
+            'name'                   => $m->name,
+            'first_name'             => $m->first_name,
+            'last_name'              => $m->last_name,
+            'contact_number'         => $m->contact_number,
+            'date_of_birth'          => $m->date_of_birth?->format('M d, Y'),
+            'address'                => $m->address,
+            'share_capital'          => (float) ($m->share_capital ?? 0),
+            'savings_balance'        => (float) ($m->savings_balance ?? 0),
+            'start_date'             => $m->start_date?->format('M d, Y'),
+            'gender'                 => $m->gender,
+            'standing'               => $m->standing,
+            'status'                 => $m->status,
+            'is_archived'            => $m->is_archived,
+            'archived_at'            => $m->archived_at?->format('M d, Y'),
+            'archive_year'           => $m->archive_year,
+            'archive_reason'         => $m->archive_reason,
+            'archived_by_name'       => $m->archivedBy?->name,
+            'migs_score'             => $m->migs_score ?? 0,
+            'migs_classification'    => $m->migs_classification ?? 'non_migs',
+            'restore_requested'      => (bool) $m->restore_requested,
+            'restore_requested_at'   => $m->restore_requested_at?->format('M d, Y'),
+            'restore_requested_by_name' => $m->restoreRequestedBy?->name,
+            'restore_request_reason' => $m->restore_request_reason,
+        ]);
+
+        $archiveYears = Member::where('is_archived', true)
+            ->whereNotNull('archive_year')
+            ->distinct()
+            ->orderBy('archive_year', 'desc')
+            ->pluck('archive_year');
+
+        return inertia('User/ArchiveManagement', [
+            'members'      => $members,
+            'archiveYears' => $archiveYears,
+            'filters'      => compact('search', 'archiveYear', 'standing', 'gender'),
+            'stats'        => [
+                'total'           => Member::where('is_archived', true)->count(),
+                'pending_restore' => Member::where('restore_requested', true)->where('is_archived', true)->count(),
+            ],
+        ]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -420,6 +580,9 @@ class MemberController extends Controller
         $year         = (int) $request->input('year', now()->year);
         $totalCapital = (float) (Member::sum('share_capital') ?? 0);
 
+        $netSurplus   = (float) \App\Models\SystemSetting::get('annual_net_surplus', 0);
+        $dividendPool = $netSurplus * 0.70; // 70% of net surplus distributed as dividends
+
         $members = Member::with('memberRegistration')
             ->whereNotIn('status', [Member::STATUS_PENDING, Member::STATUS_REJECTED])
             ->get()
@@ -428,9 +591,11 @@ class MemberController extends Controller
                 'name'            => $m->name,
                 'share_capital'   => (float) $m->share_capital,
                 'capital_pct'     => $totalCapital > 0
-                    ? round(((float) $m->share_capital / $totalCapital) * 100, 2)
+                    ? round(((float) $m->share_capital / $totalCapital) * 100, 4)
                     : 0,
-                'dividend_amount' => 0,
+                'dividend_amount' => $totalCapital > 0 && $dividendPool > 0
+                    ? round(((float) $m->share_capital / $totalCapital) * $dividendPool, 2)
+                    : 0,
                 'status'          => 'tentative',
                 'year'            => $year,
             ]);
@@ -440,6 +605,8 @@ class MemberController extends Controller
             'year'           => $year,
             'totalCapital'   => $totalCapital,
             'totalMembers'   => $members->count(),
+            'netSurplus'     => $netSurplus,
+            'dividendPool'   => $dividendPool,
             'availableYears' => range(now()->year, now()->year - 5),
         ]);
     }
@@ -740,6 +907,19 @@ class MemberController extends Controller
             'remaining_balance' => $newBalance,
             'status'            => $newBalance <= 0 ? 'fully_paid' : $loan->status,
         ]);
+
+        // Mark the next pending/overdue amortization as paid
+        $nextAmortization = LoanAmortization::where('loan_id', $loan->id)
+            ->whereIn('status', ['pending', 'overdue'])
+            ->orderBy('due_date')
+            ->first();
+
+        if ($nextAmortization) {
+            $nextAmortization->update([
+                'status'  => 'paid',
+                'paid_at' => now(),
+            ]);
+        }
 
         if ($member) {
             app(\App\Services\MigsScoreService::class)->recalculate($member);

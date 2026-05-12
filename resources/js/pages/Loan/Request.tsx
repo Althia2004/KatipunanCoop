@@ -1,9 +1,19 @@
 import type { FormEvent } from 'react';
 import { Head, useForm } from '@inertiajs/react';
 
+const LOAN_TYPES = [
+    { value: 'regular',       label: 'Regular Loan',       desc: 'General-purpose cooperative loan' },
+    { value: 'emergency',     label: 'Emergency Loan',     desc: 'For urgent, unforeseen needs' },
+    { value: 'educational',   label: 'Educational Loan',   desc: 'School fees and learning expenses' },
+    { value: 'livelihood',    label: 'Livelihood Loan',    desc: 'Business or livelihood support' },
+    { value: 'housing',       label: 'Housing Loan',       desc: 'Home improvement or construction' },
+    { value: 'agricultural',  label: 'Agricultural Loan',  desc: 'Farm inputs and crop production' },
+] as const;
+
 export default function Request() {
     const { data, setData, post, processing, errors } = useForm({
         amount: '',
+        loan_type: '',
         purpose: '',
     });
 
@@ -22,6 +32,29 @@ export default function Request() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-3xl border border-zinc-200 shadow-sm">
+                {/* Loan Type */}
+                <div>
+                    <label className="block text-sm font-bold text-zinc-700 mb-2">Loan Type</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {LOAN_TYPES.map(lt => (
+                            <button
+                                key={lt.value}
+                                type="button"
+                                onClick={() => setData('loan_type', lt.value)}
+                                className={`text-left px-4 py-3 rounded-xl border-2 transition-all ${
+                                    data.loan_type === lt.value
+                                        ? 'border-[#2d4734] bg-[#2d4734]/5'
+                                        : 'border-zinc-200 bg-zinc-50 hover:border-zinc-300'
+                                }`}
+                            >
+                                <p className={`text-sm font-bold ${data.loan_type === lt.value ? 'text-[#2d4734]' : 'text-zinc-700'}`}>{lt.label}</p>
+                                <p className="text-xs text-zinc-400 mt-0.5">{lt.desc}</p>
+                            </button>
+                        ))}
+                    </div>
+                    {errors.loan_type && <p className="text-red-500 text-xs mt-1 font-medium">{errors.loan_type}</p>}
+                </div>
+
                 <div>
                     <label className="block text-sm font-bold text-zinc-700 mb-1">Loan Amount</label>
                     <input

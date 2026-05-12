@@ -56,7 +56,7 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
 
     // Create
     const [createOpen, setCreateOpen] = useState(false);
-    const createForm = useForm({ member_id: '', amount: '', purpose: '', term_months: '12', interest_rate: '3' });
+    const createForm = useForm({ member_id: '', amount: '', loan_type: '', purpose: '', term_months: '12', interest_rate: '3' });
 
     // Detail
     const [detailLoan, setDetailLoan] = useState<LoanRequest | null>(null);
@@ -161,6 +161,7 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                                 <tr>
                                     <th className="px-5 py-3">Requested By</th>
                                     <th className="px-5 py-3">Amount</th>
+                                    <th className="px-5 py-3">Type</th>
                                     <th className="px-5 py-3">Purpose</th>
                                     <th className="px-5 py-3">Term</th>
                                     <th className="px-5 py-3">Rate</th>
@@ -188,6 +189,13 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                                             {Number(lr.amount) > 50000 && (
                                                 <span className="text-[10px] text-[#c8920a] font-semibold">BOD required</span>
                                             )}
+                                        </td>
+                                        <td className="px-5 py-3">
+                                            {lr.loan_type ? (
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 text-zinc-600 capitalize">
+                                                    {lr.loan_type}
+                                                </span>
+                                            ) : <span className="text-zinc-300">—</span>}
                                         </td>
                                         <td className="px-5 py-3 text-zinc-500 max-w-[160px] truncate">{lr.purpose || '—'}</td>
                                         <td className="px-5 py-3 text-zinc-500">{lr.term_months}mo</td>
@@ -439,6 +447,24 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                                 </p>
                             )}
                             {createForm.errors.amount && <p className="text-xs text-red-500">{createForm.errors.amount}</p>}
+                        </div>
+                        <div className="space-y-1">
+                            <Label className="text-xs">Loan Type <span className="text-red-500">*</span></Label>
+                            <select
+                                value={createForm.data.loan_type}
+                                onChange={e => createForm.setData('loan_type', e.target.value)}
+                                className="w-full border border-zinc-200 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-[#2d5a27]/30"
+                                required
+                            >
+                                <option value="">Select type...</option>
+                                <option value="regular">Regular Loan</option>
+                                <option value="emergency">Emergency Loan</option>
+                                <option value="educational">Educational Loan</option>
+                                <option value="livelihood">Livelihood Loan</option>
+                                <option value="housing">Housing Loan</option>
+                                <option value="agricultural">Agricultural Loan</option>
+                            </select>
+                            {createForm.errors.loan_type && <p className="text-xs text-red-500">{createForm.errors.loan_type}</p>}
                         </div>
                         <div className="space-y-1">
                             <Label className="text-xs">Purpose <span className="text-red-500">*</span></Label>

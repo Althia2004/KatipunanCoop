@@ -7,6 +7,7 @@ use App\Models\LoanRequest;
 use App\Models\MemberRegistration;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Spatie\Activitylog\Models\Activity;
 
@@ -99,7 +100,7 @@ class SuperadminController extends Controller
         User::create([
             'name'              => $validated['name'],
             'email'             => $validated['email'],
-            'password'          => $validated['password'],
+            'password'          => Hash::make($validated['password']),
             'role'              => $validated['role'],
             'email_verified_at' => now(),
         ]);
@@ -149,6 +150,47 @@ class SuperadminController extends Controller
         return back()->with('success', 'Staff member removed successfully.');
     }
 
+    public function pendingApprovals()
+    {
+        $pendingRegistrations = MemberRegistration::where('status', 'for_bod_approval')
+            ->latest()
+            ->get()
+            ->map(fn ($r) => [
+                'id'   => $r->id,
+                'name' => trim($r->first_name . ' ' . $r->last_name),
+                'type' => 'registration',
+                'date' => $r->created_at->format('M d, Y'),
+            ]);
+
+        $pendingDeletions = \App\Models\Member::where('status', \App\Models\Member::STATUS_PENDING_DELETION)
+            ->latest()
+            ->get()
+            ->map(fn ($m) => [
+                'id'   => $m->id,
+                'name' => $m->name,
+                'type' => 'deletion',
+                'date' => $m->updated_at->format('M d, Y'),
+            ]);
+
+        $pendingLoans = LoanRequest::where('status', 'for_bod_approval')
+            ->latest()
+            ->get()
+            ->map(fn ($lr) => [
+                'id'     => $lr->id,
+                'name'   => $lr->requestedBy?->name ?? '—',
+                'type'   => 'loan',
+                'amount' => $lr->amount,
+                'date'   => $lr->created_at->format('M d, Y'),
+            ]);
+
+        return inertia('Superadmin/PendingApprovals/PendingApprovalsPanel', [
+            'pendingRegistrations' => $pendingRegistrations->values(),
+            'pendingDeletions'     => $pendingDeletions->values(),
+            'pendingLoans'         => $pendingLoans->values(),
+            'total'                => $pendingRegistrations->count() + $pendingDeletions->count() + $pendingLoans->count(),
+        ]);
+    }
+
     public function approvals()
     {
         $pendingLoans = LoanRequest::where('status', LoanRequest::STATUS_PENDING)
@@ -190,6 +232,30 @@ class SuperadminController extends Controller
                     'date'    => $m->updated_at->format('M d, Y'),
                     'priority' => 'High',
                 ])->values(),
+            'pendingArchives'      => \App\Models\Member::pendingArchive()
+                ->with('archiveRequestedBy:id,name')
+                ->latest('archive_requested_at')
+                ->get()
+                ->map(fn ($m) => [
+                    'id'           => $m->id,
+                    'name'         => $m->name,
+                    'reason'       => $m->archive_request_reason,
+                    'requested_by' => $m->archiveRequestedBy?->name ?? '—',
+                    'requested_at' => $m->archive_requested_at?->format('M d, Y'),
+                ])->values(),
+            'pendingRestores'      => \App\Models\Member::pendingRestore()
+                ->with('restoreRequestedBy:id,name')
+                ->latest('restore_requested_at')
+                ->get()
+                ->map(fn ($m) => [
+                    'id'           => $m->id,
+                    'name'         => $m->name,
+                    'reason'       => $m->restore_request_reason,
+                    'requested_by' => $m->restoreRequestedBy?->name ?? '—',
+                    'requested_at' => $m->restore_requested_at?->format('M d, Y'),
+                    'archived_at'  => $m->archived_at?->format('M d, Y'),
+                    'archive_reason' => $m->archive_reason,
+                ])->values(),
         ]);
     }
 
@@ -223,7 +289,7 @@ class SuperadminController extends Controller
             $user = User::create([
                 'name'              => trim("{$memberRegistration->first_name} {$memberRegistration->last_name}"),
                 'email'             => $email,
-                'password'          => 'Member@' . date('Y'),
+                'password'          => Hash::make('Member@' . date('Y')),
                 'role'              => 'member',
                 'email_verified_at' => now(),
             ]);
@@ -263,13 +329,13 @@ class SuperadminController extends Controller
 
     public function approveDeletion(\App\Models\Member $member)
     {
-        $name = $member->name;
-        $member->delete();
+        $member->archive('Approved for archival by Superadmin', auth()->id());
 
         activity()->causedBy(auth()->user())
-            ->log('Member deletion approved — ' . $name . ' permanently removed');
+            ->performedOn($member)
+            ->log('Member deletion approved — ' . $member->name . ' archived');
 
-        return back()->with('success', 'Member ' . $name . ' deleted successfully.');
+        return back()->with('success', 'Member ' . $member->name . ' has been archived.');
     }
 
     public function rejectDeletion(\App\Models\Member $member)
@@ -283,17 +349,118 @@ class SuperadminController extends Controller
         return back()->with('success', 'Deletion request rejected. Member restored to active.');
     }
 
+    public function approveArchive(\App\Models\Member $member)
+    {
+        abort_unless($member->archive_requested && !$member->is_archived, 422, 'No pending archive request for this member.');
+
+        $member->update([
+            'is_archived'            => true,
+            'status'                 => \App\Models\Member::STATUS_ARCHIVED,
+            'archived_at'            => now(),
+            'archived_by'            => auth()->id(),
+            'archive_reason'         => $member->archive_request_reason,
+            'archive_year'           => now()->year,
+            'archive_requested'      => false,
+            'archive_requested_at'   => null,
+            'archive_requested_by'   => null,
+            'archive_request_reason' => null,
+        ]);
+
+        // Disable user account
+        if ($member->user_id) {
+            \App\Models\User::where('id', $member->user_id)->update(['email_verified_at' => null]);
+        }
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log('Archive request approved — ' . $member->name . ' archived');
+
+        return back()->with('success', 'Archive request approved. ' . $member->name . ' has been archived.');
+    }
+
+    public function rejectArchive(\App\Models\Member $member)
+    {
+        abort_unless($member->archive_requested, 422, 'No pending archive request for this member.');
+
+        $member->update([
+            'archive_requested'      => false,
+            'archive_requested_at'   => null,
+            'archive_requested_by'   => null,
+            'archive_request_reason' => null,
+            'status'                 => \App\Models\Member::STATUS_MEMBER,
+        ]);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log('Archive request rejected — ' . $member->name . ' remains active');
+
+        return back()->with('success', 'Archive request rejected. ' . $member->name . ' remains active.');
+    }
+
+    public function approveRestore(\App\Models\Member $member)
+    {
+        abort_unless($member->restore_requested && $member->is_archived, 422, 'No pending restore request for this member.');
+
+        $member->update([
+            'is_archived'            => false,
+            'status'                 => \App\Models\Member::STATUS_MEMBER,
+            'archived_at'            => null,
+            'archived_by'            => null,
+            'archive_reason'         => null,
+            'archive_year'           => null,
+            'restore_requested'      => false,
+            'restore_requested_at'   => null,
+            'restore_requested_by'   => null,
+            'restore_request_reason' => null,
+        ]);
+
+        // Re-enable user account
+        if ($member->user_id) {
+            \App\Models\User::where('id', $member->user_id)->update(['email_verified_at' => now()]);
+        }
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log('Restore request approved — ' . $member->name . ' restored to active');
+
+        return back()->with('success', 'Restore request approved. ' . $member->name . ' has been restored to active.');
+    }
+
+    public function rejectRestore(\App\Models\Member $member)
+    {
+        abort_unless($member->restore_requested, 422, 'No pending restore request for this member.');
+
+        $member->update([
+            'restore_requested'      => false,
+            'restore_requested_at'   => null,
+            'restore_requested_by'   => null,
+            'restore_request_reason' => null,
+            'status'                 => \App\Models\Member::STATUS_ARCHIVED,
+        ]);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log('Restore request rejected — ' . $member->name . ' remains archived');
+
+        return back()->with('success', 'Restore request rejected. ' . $member->name . ' remains archived.');
+    }
+
     public function settings()
     {
+        $settings = \App\Models\SystemSetting::all()
+            ->keyBy('key')
+            ->map(fn ($s) => $s->value);
+
         return inertia('Superadmin/Settings', [
             'settings' => [
-                'lendingRate'        => 3,
-                'caRate'             => 2,
-                'latePenalty'        => 50,
-                'managerLimit'       => 50000,
-                'bodThreshold'       => 80,
-                'migsMinScore'       => 50,
-                'dividendAllocation' => 70,
+                'lendingRate'        => (float) ($settings['interest_rate']      ?? 3),
+                'caRate'             => (float) ($settings['ca_interest_rate']   ?? 2),
+                'latePenalty'        => (float) ($settings['penalty_rate']       ?? 5),
+                'managerLimit'       => (int)   ($settings['bod_loan_threshold'] ?? 50000),
+                'bodThreshold'       => (int)   ($settings['min_capital_share']  ?? 20000),
+                'migsMinScore'       => (int)   ($settings['min_migs_score']     ?? 50),
+                'dividendAllocation' => (float) ($settings['dividend_rule']      ?? 70),
+                'annualNetSurplus'   => (float) ($settings['annual_net_surplus'] ?? 0),
             ],
         ]);
     }
@@ -308,9 +475,27 @@ class SuperadminController extends Controller
             'bodThreshold'       => ['required', 'numeric', 'min:0', 'max:100'],
             'migsMinScore'       => ['required', 'numeric', 'min:0'],
             'dividendAllocation' => ['required', 'numeric', 'min:0', 'max:100'],
+            'annualNetSurplus'   => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        // TODO: persist to system_settings table when created
+        $map = [
+            'lendingRate'        => 'interest_rate',
+            'caRate'             => 'ca_interest_rate',
+            'latePenalty'        => 'penalty_rate',
+            'managerLimit'       => 'bod_loan_threshold',
+            'bodThreshold'       => 'min_capital_share',
+            'migsMinScore'       => 'min_migs_score',
+            'dividendAllocation' => 'dividend_rule',
+            'annualNetSurplus'   => 'annual_net_surplus',
+        ];
+
+        foreach ($map as $formKey => $dbKey) {
+            \App\Models\SystemSetting::updateOrInsert(
+                ['key' => $dbKey],
+                ['value' => $request->input($formKey), 'group' => 'general']
+            );
+        }
+
         activity()->causedBy(auth()->user())
             ->log('System settings updated');
 
@@ -421,10 +606,10 @@ class SuperadminController extends Controller
         $totalCollections = \App\Models\LoanPayment::sum('amount_paid');
 
         // TODO: wire once Member model has savings_balance column
-        $totalSavings = \App\Models\Member::whereIn('status', ['approved', 'active'])->sum('savings_balance');
+        $totalSavings = \App\Models\Member::whereIn('status', ['approved', 'member', 'regular'])->sum('savings_balance');
 
         // TODO: wire once Member model has share_capital column
-        $totalCapitalShares = \App\Models\Member::whereIn('status', ['approved', 'active'])->sum('share_capital');
+        $totalCapitalShares = \App\Models\Member::whereIn('status', ['approved', 'member', 'regular'])->sum('share_capital');
 
         // Monthly summary for selected year (only months with activity)
         $monthlySummary = collect(range(1, 12))->map(function ($month) use ($year) {
@@ -593,7 +778,7 @@ class SuperadminController extends Controller
         if ($user) {
             $accountData = ['email' => $validated['email']];
             if (!empty($validated['password'])) {
-                $accountData['password'] = $validated['password'];
+                $accountData['password'] = Hash::make($validated['password']);
             }
             $user->update($accountData);
         }
@@ -620,7 +805,7 @@ class SuperadminController extends Controller
         if ($user) {
             $updateData = ['email' => $validated['email']];
             if (!empty($validated['password'])) {
-                $updateData['password'] = $validated['password'];
+                $updateData['password'] = Hash::make($validated['password']);
             }
             $user->update($updateData);
             activity()->causedBy(auth()->user())
@@ -669,6 +854,7 @@ class SuperadminController extends Controller
             'member_id'     => $l->member_id,
             'amount'        => (float) $l->principal_amount,
             'purpose'       => $l->loanRequest?->purpose ?? '—',
+            'loan_type'     => $l->loanRequest?->loan_type,
             'status'        => $l->status,
             'interest_rate' => (float) $l->interest_rate,
             'term_months'   => $l->term_months,
@@ -880,7 +1066,7 @@ class SuperadminController extends Controller
         $members = \App\Models\Member::with(['memberRegistration', 'copraSales' => function ($q) use ($year) {
             $q->whereYear('sale_date', $year)->orderByDesc('sale_date');
         }])
-        ->whereIn('status', ['approved', 'active'])
+        ->whereIn('status', ['approved', 'member', 'regular'])
         ->orderBy('name')
         ->get()
         ->map(function ($m) use ($year) {
@@ -986,7 +1172,7 @@ class SuperadminController extends Controller
     public function savingsOverview()
     {
         $members = \App\Models\Member::with(['memberRegistration'])
-            ->whereIn('status', ['approved', 'active'])
+            ->whereIn('status', ['approved', 'member', 'regular'])
             ->orderBy('name')
             ->get()
             ->map(fn ($m) => [
@@ -996,8 +1182,8 @@ class SuperadminController extends Controller
                 'share_capital'   => (float) ($m->share_capital ?? 0),
             ]);
 
-        $totalSavings = \App\Models\Member::whereIn('status', ['approved', 'active'])->sum('savings_balance');
-        $totalCapital = \App\Models\Member::whereIn('status', ['approved', 'active'])->sum('share_capital');
+        $totalSavings = \App\Models\Member::whereIn('status', ['approved', 'member', 'regular'])->sum('savings_balance');
+        $totalCapital = \App\Models\Member::whereIn('status', ['approved', 'member', 'regular'])->sum('share_capital');
         $totalMembers = $members->count();
 
         return inertia('Superadmin/SavingsOverview', [
@@ -1094,6 +1280,7 @@ class SuperadminController extends Controller
         ]);
 
         $member->update(['share_capital' => $newBalance]);
+        $member->refresh()->checkAndUpgradeToRegular();
         app(\App\Services\MigsScoreService::class)->recalculate($member);
 
         activity()->causedBy(auth()->user())
