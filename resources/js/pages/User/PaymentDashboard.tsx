@@ -1,6 +1,6 @@
-import { Head, router, usePage } from '@inertiajs/react';
+﻿import { Head, router, usePage } from '@inertiajs/react';
 import { useState, useEffect, useCallback } from 'react';
-import { CreditCard, Plus, Pencil, Receipt } from 'lucide-react';
+import { CreditCard, Plus, Pencil, Receipt, PiggyBank } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -11,11 +11,10 @@ import {
     DialogFooter,
 } from '@/components/ui/dialog';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 interface LoanOption {
     id: number;
     remaining_balance: number;
+    principal_amount: number;
     status: string;
 }
 
@@ -72,10 +71,11 @@ interface Props {
     filters: { search: string; method: string };
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function fmt(n: number) {
-    return '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return '₱' + Number(n).toLocaleString('en-PH', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
 }
 
 const today = new Date().toISOString().slice(0, 10);
@@ -90,26 +90,22 @@ const methodBadge: Record<string, string> = {
 };
 
 const typeBadge: Record<string, string> = {
-    onsite: 'bg-green-100 text-green-800 border-green-200',
+    onsite: 'bg-[#2d5a27]/10 text-[#2d5a27] border-[#2d5a27]/20',
     online: 'bg-blue-100 text-blue-800 border-blue-200',
 };
 
-const METHODS = ['Cash', 'GCash', 'Maya', 'BPI', 'Credit Card', 'Debit Card'];
+const METHODS        = ['Cash', 'GCash', 'Maya', 'BPI', 'Credit Card', 'Debit Card'];
 const FILTER_METHODS = ['', 'Cash', 'GCash', 'Maya', 'BPI', 'Credit Card', 'Debit Card'];
 
-// ─── Default form state ───────────────────────────────────────────────────────
-
 const blankForm = {
-    loan_id: '',
-    amount_paid: '',
-    payment_date: today,
-    payment_method: 'Cash',
-    payment_type: 'onsite',
+    loan_id:          '',
+    amount_paid:      '',
+    payment_date:     today,
+    payment_method:   'Cash',
+    payment_type:     'onsite',
     reference_number: '',
-    remarks: '',
+    remarks:          '',
 };
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PaymentDashboard({ payments, stats, members, filters }: Props) {
     const { props } = usePage<{ flash?: { success?: string } }>();
@@ -118,22 +114,23 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
     const [search, setSearch] = useState(filters.search ?? '');
     const [method, setMethod] = useState(filters.method ?? '');
 
-    const [addOpen, setAddOpen] = useState(false);
-    const [editOpen, setEditOpen] = useState(false);
-    const [editTarget, setEditTarget] = useState<Payment | null>(null);
-
+    // Add dialog
+    const [addOpen, setAddOpen]                   = useState(false);
+    const [paymentCategory, setPaymentCategory]   = useState<'loan' | 'capital_share'>('loan');
     const [selectedMemberId, setSelectedMemberId] = useState('');
-    const [form, setForm] = useState({ ...blankForm });
-    const [editForm, setEditForm] = useState({ ...blankForm });
-    const [submitting, setSubmitting] = useState(false);
-    const [paymentCategory, setPaymentCategory] = useState<'loan' | 'capital_share'>('loan');
+    const [form, setForm]                         = useState({ ...blankForm });
+    const [submitting, setSubmitting]             = useState(false);
 
-    const apply = useCallback(
-        (s: string, m: string) => {
-            router.get('/user/payments', { search: s, method: m }, { preserveState: true, replace: true });
-        },
-        [],
-    );
+    // Edit dialog
+    const [editOpen, setEditOpen]     = useState(false);
+    const [editTarget, setEditTarget] = useState<Payment | null>(null);
+    const [editForm, setEditForm]     = useState({ ...blankForm });
+
+    const apply = useCallback((s: string, m: string) => {
+        router.get('/user/payments', { search: s, method: m }, {
+            preserveState: true, replace: true,
+        });
+    }, []);
 
     useEffect(() => {
         const t = setTimeout(() => apply(search, method), 400);
@@ -141,9 +138,7 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
     }, [search]);
 
     const selectedMember = members.find((m) => m.id.toString() === selectedMemberId);
-    const activeLoans = selectedMember?.loans ?? [];
-
-    // ── Add ──────────────────────────────────────────────────────────────────
+    const activeLoans    = selectedMember?.loans ?? [];
 
     const handleAdd = () => {
         setForm({ ...blankForm });
@@ -187,8 +182,6 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
         }
     };
 
-    // ── Edit ─────────────────────────────────────────────────────────────────
-
     const handleEdit = (p: Payment) => {
         setEditTarget(p);
         setEditForm({
@@ -217,42 +210,49 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
         <>
             <Head title="Payment Dashboard" />
             <div className="p-6 space-y-6 max-w-7xl mx-auto">
-                {/* Flash */}
+
                 {flash?.success && (
                     <div className="flex items-center gap-3 px-4 py-3 bg-[#2d5a27]/10 border border-[#2d5a27]/20 rounded-xl text-sm text-[#2d5a27] font-medium">
                         {flash.success}
                     </div>
                 )}
 
-                {/* ── Header ── */}
+                {/* Header */}
                 <div className="flex items-start justify-between">
                     <div>
-                        <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-1">User Management</p>
+                        <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-1">
+                            User Management
+                        </p>
                         <h1 className="text-2xl font-bold text-[#2d5a27]">Payment Dashboard</h1>
                         <p className="text-sm text-zinc-400 mt-0.5">Record and track loan payments</p>
                     </div>
-                    <button onClick={handleAdd} className="flex items-center gap-2 px-4 py-2 bg-[#2d5a27] text-white text-sm font-semibold rounded-xl hover:bg-[#234820] transition">
-                        <Plus className="w-4 h-4" />
-                        Add Payment
+                    <button
+                        onClick={handleAdd}
+                        className="flex items-center gap-2 px-4 py-2 bg-[#2d5a27] text-white text-sm font-semibold rounded-xl hover:bg-[#234820] transition"
+                    >
+                        <Plus className="w-4 h-4" /> Add Payment
                     </button>
                 </div>
 
-                {/* ── Stats ── */}
+                {/* Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
-                        { label: 'Total Payments',  value: stats.total.toString() },
-                        { label: 'Total Collected', value: fmt(stats.collected) },
-                        { label: 'Onsite Payments', value: stats.onsite.toString() },
-                        { label: 'Online Payments', value: stats.online.toString() },
+                        { label: 'Total Payments',  value: stats.total.toString(),  icon: CreditCard, color: 'text-[#2d5a27]', bg: 'bg-[#2d5a27]/10' },
+                        { label: 'Total Collected', value: fmt(stats.collected),    icon: PiggyBank,  color: 'text-[#2d5a27]', bg: 'bg-[#2d5a27]/10' },
+                        { label: 'Onsite Payments', value: stats.onsite.toString(), icon: CreditCard, color: 'text-[#c8920a]', bg: 'bg-[#c8920a]/10' },
+                        { label: 'Online Payments', value: stats.online.toString(), icon: CreditCard, color: 'text-blue-600',   bg: 'bg-blue-50' },
                     ].map((s) => (
                         <div key={s.label} className="bg-white rounded-2xl border border-zinc-200 p-5 shadow-sm">
+                            <div className={`w-8 h-8 rounded-xl ${s.bg} flex items-center justify-center mb-2`}>
+                                <s.icon className={`w-4 h-4 ${s.color}`} />
+                            </div>
                             <p className="text-xs font-medium text-zinc-500 mb-1">{s.label}</p>
                             <p className="text-2xl font-bold text-zinc-900">{s.value}</p>
                         </div>
                     ))}
                 </div>
 
-                {/* ── Filters ── */}
+                {/* Filters */}
                 <div className="flex flex-col sm:flex-row gap-3">
                     <input
                         type="text"
@@ -278,13 +278,15 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                     </div>
                 </div>
 
-                {/* ── Table ── */}
+                {/* Table */}
                 <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-zinc-100 bg-zinc-50">
                                 {['Member', 'Loan #', 'Amount', 'Method', 'Type', 'Date', 'Recorded By', 'Actions'].map((h) => (
-                                    <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">{h}</th>
+                                    <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+                                        {h}
+                                    </th>
                                 ))}
                             </tr>
                         </thead>
@@ -310,31 +312,33 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                                     </td>
                                     <td className="px-5 py-3.5 font-semibold text-zinc-800">{fmt(p.amount_paid)}</td>
                                     <td className="px-5 py-3.5">
-                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-medium border ${methodBadge[p.payment_method] ?? 'bg-zinc-100 text-zinc-700 border-zinc-200'}`}>
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-medium border ${
+                                            methodBadge[p.payment_method] ?? 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                                        }`}>
                                             {p.payment_method}
                                         </span>
                                     </td>
                                     <td className="px-5 py-3.5">
-                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-medium border capitalize ${typeBadge[p.payment_type] ?? ''}`}>
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-medium border capitalize ${
+                                            typeBadge[p.payment_type] ?? ''
+                                        }`}>
                                             {p.payment_type}
                                         </span>
                                     </td>
                                     <td className="px-5 py-3.5 text-zinc-700">{p.payment_date}</td>
-                                    <td className="px-5 py-3.5 text-zinc-500">{p.recorded_by_name}</td>
+                                    <td className="px-5 py-3.5 text-zinc-500 text-xs">{p.recorded_by_name}</td>
                                     <td className="px-5 py-3.5">
                                         <div className="flex gap-1">
                                             <a href={`/user/payments/${p.id}/receipt?type=${p.category === 'capital_share' ? 'capital_share' : 'loan'}`} target="_blank" rel="noopener noreferrer">
                                                 <button className="flex items-center gap-1 h-7 px-2 text-xs border border-zinc-200 rounded-lg text-zinc-600 hover:bg-zinc-50 transition">
-                                                    <Receipt className="w-3 h-3" />
-                                                    Receipt
+                                                    <Receipt className="w-3 h-3" /> Receipt
                                                 </button>
                                             </a>
                                             <button
-                                                className="flex items-center gap-1 h-7 px-2 text-xs border border-zinc-200 rounded-lg text-zinc-600 hover:bg-zinc-50 transition"
                                                 onClick={() => handleEdit(p)}
+                                                className="flex items-center gap-1 h-7 px-2 text-xs border border-zinc-200 rounded-lg text-zinc-600 hover:bg-zinc-50 transition"
                                             >
-                                                <Pencil className="w-3 h-3" />
-                                                Edit
+                                                <Pencil className="w-3 h-3" /> Edit
                                             </button>
                                         </div>
                                     </td>
@@ -344,7 +348,7 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                     </table>
                 </div>
 
-                {/* ── Pagination ── */}
+                {/* Pagination */}
                 {payments.last_page > 1 && (
                     <div className="flex gap-1 justify-center flex-wrap">
                         {payments.links.map((link, i) => (
@@ -364,9 +368,9 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                 )}
             </div>
 
-            {/* ── Add Payment Dialog ── */}
-            <Dialog open={addOpen} onOpenChange={setAddOpen}>
-                <DialogContent className="max-w-lg">
+            {/* Add Payment Dialog */}
+            <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) setPaymentCategory('loan'); }}>
+                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Record Payment</DialogTitle>
                     </DialogHeader>
@@ -383,7 +387,7 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                                         : 'text-zinc-500 hover:text-zinc-700'
                                 }`}
                             >
-                                🏦 Loan Payment
+                                 Loan Payment
                             </button>
                             <button
                                 type="button"
@@ -394,7 +398,7 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                                         : 'text-zinc-500 hover:text-zinc-700'
                                 }`}
                             >
-                                💰 Capital Share
+                                 Capital Share
                             </button>
                         </div>
 
@@ -496,9 +500,7 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                             <div className="space-y-1.5">
                                 <Label>Amount (₱)</Label>
                                 <Input
-                                    type="number"
-                                    min="0.01"
-                                    step="0.01"
+                                    type="number" min="0.01" step="0.01"
                                     value={form.amount_paid}
                                     onChange={(e) => setForm((f) => ({ ...f, amount_paid: e.target.value }))}
                                     placeholder="0.00"
@@ -533,9 +535,7 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                                 {['onsite', 'online'].map((t) => (
                                     <label key={t} className="flex items-center gap-2 text-sm cursor-pointer capitalize">
                                         <input
-                                            type="radio"
-                                            name="add_payment_type"
-                                            value={t}
+                                            type="radio" name="add_payment_type" value={t}
                                             checked={form.payment_type === t}
                                             onChange={() => setForm((f) => ({ ...f, payment_type: t }))}
                                         />
@@ -545,7 +545,7 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                             </div>
                         </div>
 
-                        {/* Reference (required if online) */}
+                        {/* Reference */}
                         <div className="space-y-1.5">
                             <Label>
                                 Reference Number
@@ -570,7 +570,11 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                     </div>
 
                     <DialogFooter>
-                        <button onClick={() => setAddOpen(false)} disabled={submitting} className="px-4 py-2 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition">
+                        <button
+                            onClick={() => setAddOpen(false)}
+                            disabled={submitting}
+                            className="px-4 py-2 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition"
+                        >
                             Cancel
                         </button>
                         <button
@@ -584,7 +588,7 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                 </DialogContent>
             </Dialog>
 
-            {/* ── Edit Payment Dialog ── */}
+            {/* Edit Payment Dialog */}
             <Dialog open={editOpen} onOpenChange={setEditOpen}>
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
@@ -593,8 +597,7 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
 
                     {editTarget && (
                         <>
-                            {/* Audit info */}
-                            <div className="text-xs text-zinc-400 space-y-1 border-b border-zinc-100 pb-3 mb-1">
+                            <div className="text-xs text-zinc-400 space-y-1 bg-zinc-50 rounded-xl px-4 py-3 border border-zinc-100">
                                 <p>Recorded by <strong className="text-zinc-600">{editTarget.recorded_by_name}</strong> on {editTarget.recorded_at}</p>
                                 {editTarget.updated_by_name && (
                                     <p>Last edited by <strong className="text-zinc-600">{editTarget.updated_by_name}</strong> on {editTarget.updated_at}</p>
@@ -602,14 +605,11 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                             </div>
 
                             <div className="space-y-4 py-2">
-                                {/* Amount + Date */}
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
                                         <Label>Amount (₱)</Label>
                                         <Input
-                                            type="number"
-                                            min="0.01"
-                                            step="0.01"
+                                            type="number" min="0.01" step="0.01"
                                             value={editForm.amount_paid}
                                             onChange={(e) => setEditForm((f) => ({ ...f, amount_paid: e.target.value }))}
                                         />
@@ -624,7 +624,6 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                                     </div>
                                 </div>
 
-                                {/* Method */}
                                 <div className="space-y-1.5">
                                     <Label>Payment Method</Label>
                                     <select
@@ -636,16 +635,13 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                                     </select>
                                 </div>
 
-                                {/* Type */}
                                 <div className="space-y-1.5">
                                     <Label>Payment Type</Label>
                                     <div className="flex gap-4">
                                         {['onsite', 'online'].map((t) => (
                                             <label key={t} className="flex items-center gap-2 text-sm cursor-pointer capitalize">
                                                 <input
-                                                    type="radio"
-                                                    name="edit_payment_type"
-                                                    value={t}
+                                                    type="radio" name="edit_payment_type" value={t}
                                                     checked={editForm.payment_type === t}
                                                     onChange={() => setEditForm((f) => ({ ...f, payment_type: t }))}
                                                 />
@@ -655,7 +651,6 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                                     </div>
                                 </div>
 
-                                {/* Reference */}
                                 <div className="space-y-1.5">
                                     <Label>Reference Number</Label>
                                     <Input
@@ -664,7 +659,6 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                                     />
                                 </div>
 
-                                {/* Remarks */}
                                 <div className="space-y-1.5">
                                     <Label>Remarks</Label>
                                     <Input
@@ -675,7 +669,11 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                             </div>
 
                             <DialogFooter>
-                                <button onClick={() => setEditOpen(false)} disabled={submitting} className="px-4 py-2 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition">
+                                <button
+                                    onClick={() => setEditOpen(false)}
+                                    disabled={submitting}
+                                    className="px-4 py-2 border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition"
+                                >
                                     Cancel
                                 </button>
                                 <button

@@ -48,6 +48,41 @@ class SuperadminController extends Controller
                 'priority'    => 'low',
             ]);
 
+        $totalSavings   = (float) \App\Models\Member::whereIn('status', ['approved', 'active'])->sum('savings_balance');
+        $totalCapital   = (float) \App\Models\Member::whereIn('status', ['approved', 'active'])->sum('share_capital');
+        $annualRate     = 0.03;
+        $monthlyInterest = round($totalSavings * ($annualRate / 12), 2);
+
+        $monthlySavingsSummary = collect(range(1, 12))->map(function ($month) {
+            $year = now()->year;
+            $deposits    = \App\Models\SavingsTransaction::whereYear('created_at', $year)
+                ->whereMonth('created_at', $month)
+                ->whereIn('type', ['deposit', 'credit'])
+                ->sum('amount');
+            $withdrawals = \App\Models\SavingsTransaction::whereYear('created_at', $year)
+                ->whereMonth('created_at', $month)
+                ->whereIn('type', ['withdrawal', 'debit'])
+                ->sum('amount');
+            return [
+                'month'       => \Carbon\Carbon::create($year, $month)->format('M'),
+                'deposits'    => (float) $deposits,
+                'withdrawals' => (float) $withdrawals,
+                'net'         => (float) $deposits - (float) $withdrawals,
+            ];
+        })->values();
+
+        $recentSavings = \App\Models\SavingsTransaction::with('member:id,name')
+            ->latest()
+            ->take(10)
+            ->get()
+            ->map(fn ($t) => [
+                'id'          => $t->id,
+                'member_name' => $t->member?->name ?? '—',
+                'type'        => $t->type,
+                'amount'      => (float) $t->amount,
+                'created_at'  => $t->created_at->format('M d, Y'),
+            ]);
+
         return inertia('Superadmin/Dashboard', [
             'stats' => [
                 'totalMembers'     => User::where('role', 'member')->count(),
@@ -58,7 +93,12 @@ class SuperadminController extends Controller
                     ])->count(),
                 'activeStaff'      => $staff->count(),
                 'systemAlerts'     => 0,
+                'totalSavings'     => $totalSavings,
+                'totalCapital'     => $totalCapital,
+                'monthlyInterest'  => $monthlyInterest,
             ],
+            'monthlySavingsSummary' => $monthlySavingsSummary,
+            'recentSavings'         => $recentSavings,
             'staff'           => $staff,
             'recentApprovals' => $pendingLoans->toBase()->concat($pendingRegs->toBase())->take(5)->values(),
             'recentAudit' => Activity::with('causer')
@@ -398,33 +438,24 @@ class SuperadminController extends Controller
     }
 
     public function approveRestore(\App\Models\Member $member)
-    {
-        abort_unless($member->restore_requested && $member->is_archived, 422, 'No pending restore request for this member.');
+{
+    abort_unless($member->restore_requested && $member->is_archived, 422, 'No pending restore request for this member.');
 
-        $member->update([
-            'is_archived'            => false,
-            'status'                 => \App\Models\Member::STATUS_MEMBER,
-            'archived_at'            => null,
-            'archived_by'            => null,
-            'archive_reason'         => null,
-            'archive_year'           => null,
-            'restore_requested'      => false,
-            'restore_requested_at'   => null,
-            'restore_requested_by'   => null,
-            'restore_request_reason' => null,
-        ]);
+    // Smart restore — detects member vs regular based on capital share
+    $member->restore();
 
-        // Re-enable user account
-        if ($member->user_id) {
-            \App\Models\User::where('id', $member->user_id)->update(['email_verified_at' => now()]);
-        }
-
-        activity()->causedBy(auth()->user())
-            ->performedOn($member)
-            ->log('Restore request approved — ' . $member->name . ' restored to active');
-
-        return back()->with('success', 'Restore request approved. ' . $member->name . ' has been restored to active.');
+    // Re-enable user account
+    if ($member->user_id) {
+        \App\Models\User::where('id', $member->user_id)
+            ->update(['email_verified_at' => now()]);
     }
+
+    activity()->causedBy(auth()->user())
+        ->performedOn($member)
+        ->log('Restore request approved — ' . $member->name . ' restored to active');
+
+    return back()->with('success', 'Restore request approved. ' . $member->name . ' has been restored to active.');
+}
 
     public function rejectRestore(\App\Models\Member $member)
     {
@@ -868,6 +899,7 @@ class SuperadminController extends Controller
             'active'         => $allLoans->where('status', 'active')->count(),
             'pending'        => LoanRequest::where('status', LoanRequest::STATUS_PENDING)->count(),
             'closed'         => $allLoans->where('status', 'fully_paid')->count(),
+            'arrears'        => $allLoans->where('status', 'arrears')->count(), 
             'total_released' => (float) $allLoans->sum('principal_amount'),
         ];
 
@@ -914,21 +946,23 @@ class SuperadminController extends Controller
     }
 
     public function updateLoan(Request $request, Loan $loan)
-    {
-        $validated = $request->validate([
-            'status'        => ['required', Rule::in(['active', 'fully_paid', 'defaulted'])],
-            'interest_rate' => ['required', 'numeric', 'min:0', 'max:100'],
-            'term_months'   => ['required', 'integer', 'min:1', 'max:360'],
-        ]);
+{
+    $validated = $request->validate([
+        'status'        => ['required', Rule::in(['active', 'fully_paid', 'arrears'])],
+        'interest_rate' => ['required', 'numeric', 'min:0', 'max:100'],
+        'term_months'   => ['required', 'integer', 'min:1', 'max:360'],
+    ]);
 
-        $loan->update($validated);
+    $loan->update($validated);
 
-        activity()->causedBy(auth()->user())
+    $statusLabel = ['active' => 'Active', 'fully_paid' => 'Fully Paid', 'arrears' => 'Arrears'];
+
+    activity()->causedBy(auth()->user())
             ->performedOn($loan)
-            ->log('Loan updated by superadmin — status: ' . $validated['status']);
+            ->log('Loan updated by superadmin — status: ' . ($statusLabel[$validated['status']] ?? $validated['status']));
 
-        return back()->with('success', 'Loan updated successfully.');
-    }
+    return back()->with('success', 'Loan updated successfully.');
+}
 
     public function deleteLoan(Loan $loan)
     {
@@ -1181,9 +1215,9 @@ class SuperadminController extends Controller
                 'savings_balance' => (float) ($m->savings_balance ?? 0),
                 'share_capital'   => (float) ($m->share_capital ?? 0),
             ]);
+    $totalSavings = (float) \App\Models\Member::whereIn('status', ['approved', 'member', 'regular'])->sum('savings_balance');
+    $totalCapital = (float) \App\Models\Member::whereIn('status', ['approved', 'member', 'regular'])->sum('share_capital');
 
-        $totalSavings = \App\Models\Member::whereIn('status', ['approved', 'member', 'regular'])->sum('savings_balance');
-        $totalCapital = \App\Models\Member::whereIn('status', ['approved', 'member', 'regular'])->sum('share_capital');
         $totalMembers = $members->count();
 
         return inertia('Superadmin/SavingsOverview', [

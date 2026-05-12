@@ -1,6 +1,6 @@
 ﻿import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
-import { Users, CheckCircle2, Archive, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, Archive } from 'lucide-react';
 import MemberTable, { Member } from './MemberTable';
 import MemberSearch from './MemberSearch';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
+type MemberWithFinancials = Member;
 
 interface Stats {
     total: number;
@@ -69,7 +71,6 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
             archived:     String(overrides.archived ?? showArchived),
             archive_year: overrides.archive_year  ?? archiveYear,
         };
-        // strip empty values
         Object.keys(params).forEach(k => { if (!params[k]) delete params[k]; });
         router.get('/user/member-management', params as Record<string, string>, {
             preserveState: true,
@@ -79,14 +80,14 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
 
     // -- Handlers --------------------------------------------------------------
 
-    const handleView = (member: Member) => setViewMember(member);
+    const handleView = (member: MemberWithFinancials) => setViewMember(member);
 
-    const handleEdit = (member: Member) => {
+    const handleEdit = (member: MemberWithFinancials) => {
         setEditMember(member);
         setEditForm({
-            first_name: member.first_name || member.name.split(' ')[0] || '',
-            last_name: member.last_name || member.name.split(' ').slice(1).join(' ') || '',
-            contact_number: member.contact_number || '',
+            first_name:       member.first_name || member.name.split(' ')[0] || '',
+            last_name:        member.last_name  || member.name.split(' ').slice(1).join(' ') || '',
+            contact_number:   member.contact_number || '',
             source_of_income: member.source_of_income || '',
         });
     };
@@ -99,7 +100,7 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
         });
     };
 
-    const handleLock = (member: Member) => {
+    const handleLock = (member: MemberWithFinancials) => {
         const action = member.status === 'suspended' ? 'reactivate' : 'suspend';
         if (!confirm(`Are you sure you want to ${action} ${member.name}?`)) return;
         router.patch(`/user/member-management/${member.id}/toggle-status`, {}, { preserveScroll: true });
@@ -135,6 +136,9 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
         applyFilters({ archived: newVal, archive_year: '' });
     };
 
+    const getMigsScore = (m: MemberWithFinancials) => m.migs_score ?? 0;
+    const getMigsClass = (m: MemberWithFinancials) => m.migs_classification ?? 'non_migs';
+
     return (
         <>
             <Head title="Member Management" />
@@ -160,7 +164,7 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
                                     rows={3}
                                     value={archiveReason}
                                     onChange={(e) => setArchiveReason(e.target.value)}
-                                    placeholder="Minimum 10 characters�"
+                                    placeholder="Minimum 10 characters"
                                     className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:ring-2 focus:ring-[#2d5a27] outline-none resize-none"
                                 />
                                 <p className={`text-xs ${archiveReason.length < 10 ? 'text-zinc-400' : 'text-emerald-600'}`}>
@@ -199,14 +203,14 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
                                     ) : (
                                         <>
                                             <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                                                viewMember.membership_status === 'good' ? 'bg-emerald-100 text-emerald-800' :
-                                                viewMember.membership_status === 'warning' ? 'bg-amber-100 text-amber-800' :
-                                                'bg-red-100 text-red-800'
+                                                getMigsClass(viewMember) === 'migs'
+                                                    ? 'bg-emerald-100 text-emerald-800'
+                                                    : 'bg-red-100 text-red-800'
                                             }`}>
-                                                {viewMember.membership_status === 'good' ? 'MIGS ?' : 'Non-MIGS ?'}
+                                                {getMigsClass(viewMember) === 'migs' ? 'MIGS ✓' : 'Non-MIGS ✗'}
                                             </span>
                                             <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold capitalize ${
-                                                viewMember.status === 'suspended' ? 'bg-red-100 text-red-800' :
+                                                viewMember.status === 'suspended'        ? 'bg-red-100 text-red-800' :
                                                 viewMember.status === 'pending_deletion' ? 'bg-amber-100 text-amber-800' :
                                                 'bg-emerald-100 text-emerald-800'
                                             }`}>
@@ -222,10 +226,10 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
                                 <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50">
                                     <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-3">Archive Information</p>
                                     {[
-                                        { label: 'Archived On', value: viewMember.archived_at ?? '�' },
-                                        { label: 'Archived By', value: viewMember.archived_by_name ?? '�' },
-                                        { label: 'Archive Year', value: viewMember.archive_year?.toString() ?? '�' },
-                                        { label: 'Reason', value: viewMember.archive_reason ?? '�' },
+                                        { label: 'Archived On',  value: viewMember.archived_at ?? '—' },
+                                        { label: 'Archived By',  value: viewMember.archived_by_name ?? '—' },
+                                        { label: 'Archive Year', value: viewMember.archive_year?.toString() ?? '—' },
+                                        { label: 'Reason',       value: viewMember.archive_reason ?? '—' },
                                     ].map((row) => (
                                         <div key={row.label} className="flex justify-between items-start py-2 border-b border-zinc-100 last:border-0">
                                             <span className="text-sm text-zinc-500 shrink-0 mr-4">{row.label}</span>
@@ -250,27 +254,27 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
                                             }}
                                             className="text-xs text-[#2d5a27] hover:underline flex items-center gap-1"
                                         >
-                                            ? Edit Score
+                                            ✏ Edit Score
                                         </button>
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <div className="flex-1 h-2 bg-zinc-200 rounded-full overflow-hidden">
                                             <div
                                                 className={`h-full rounded-full transition-all ${
-                                                    viewMember.migs_score >= 50 ? 'bg-[#2d5a27]' : 'bg-red-400'
+                                                    getMigsScore(viewMember) >= 50 ? 'bg-[#2d5a27]' : 'bg-red-400'
                                                 }`}
-                                                style={{ width: `${Math.min(viewMember.migs_score, 100)}%` }}
+                                                style={{ width: `${Math.min(getMigsScore(viewMember), 100)}%` }}
                                             />
                                         </div>
                                         <span className="text-sm font-bold text-zinc-700 shrink-0">
-                                            {viewMember.migs_score}/100
+                                            {getMigsScore(viewMember)}/100
                                         </span>
                                     </div>
                                     <div className="flex items-center justify-between mt-2">
                                         <p className="text-xs text-zinc-400">
-                                            {viewMember.migs_score >= 50
-                                                ? '? MIGS � Member is in good standing'
-                                                : '? Non-MIGS � Below minimum score (50)'}
+                                            {getMigsScore(viewMember) >= 50
+                                                ? '✓ MIGS — Member is in good standing'
+                                                : '✗ Non-MIGS — Below minimum score (50)'}
                                         </p>
                                         <button
                                             onClick={() => {
@@ -284,7 +288,7 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
                                             }}
                                             className="text-xs text-zinc-400 hover:text-zinc-600 hover:underline"
                                         >
-                                            ? Recalculate
+                                            ↻ Recalculate
                                         </button>
                                     </div>
                                 </div>
@@ -292,37 +296,58 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
 
                             {/* Personal Information */}
                             <div className="px-6 py-4 border-b border-zinc-100">
-                                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-3">Personal Information</p>
+                                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-3">
+                                    Personal Information
+                                </p>
                                 {[
-                                    { label: 'Full Name', value: viewMember.name },
-                                    { label: 'Gender', value: viewMember.gender },
-                                    { label: 'Date of Birth', value: viewMember.date_of_birth ?? '�' },
-                                    { label: 'Contact Number', value: viewMember.contact_number },
-                                    { label: 'Address', value: viewMember.address },
+                                    { label: 'Full Name',        value: viewMember.name },
+                                    { label: 'Gender',           value: viewMember.gender },
+                                    { label: 'Date of Birth',    value: viewMember.date_of_birth ?? '—' },
+                                    { label: 'Contact Number',   value: viewMember.contact_number },
+                                    { label: 'Address',          value: viewMember.address },
                                     { label: 'Source of Income', value: viewMember.source_of_income },
                                 ].map((row) => (
                                     <div key={row.label} className="flex justify-between items-center py-2.5 border-b border-zinc-50 last:border-0">
                                         <span className="text-sm text-zinc-500 shrink-0">{row.label}</span>
-                                        <span className="text-sm font-medium text-zinc-800 text-right max-w-48 truncate capitalize">{row.value || '�'}</span>
+                                        <span className="text-sm font-medium text-zinc-800 text-right max-w-48 truncate capitalize">{row.value || '—'}</span>
                                     </div>
                                 ))}
                             </div>
 
                             {/* Membership Information */}
                             <div className="px-6 py-4 border-b border-zinc-100">
-                                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-3">Membership Information</p>
-                                {[
-                                    { label: 'Member Since', value: viewMember.start_date ?? '�' },
-                                    { label: 'Standing', value: viewMember.standing },
-                                    { label: 'Share Capital', value: `?${viewMember.share_capital.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` },
-                                    { label: 'Savings Balance', value: `?${viewMember.savings_balance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` },
-                                    { label: 'Copra Sales YTD', value: `?${(viewMember.copra_sales_ytd ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` },
-                                ].map((row) => (
+                                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-3">
+                                    Membership Information
+                                </p>
+                                {([
+                                    { label: 'Member Since',    value: viewMember.start_date ?? '—' },
+                                    { label: 'Standing',        value: viewMember.standing },
+                                    { label: 'Share Capital',   value: `₱${(viewMember.share_capital ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, highlight: (viewMember.share_capital ?? 0) >= 20000 },
+                                    { label: 'Savings Balance', value: `₱${(viewMember.savings_balance ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, highlight: (viewMember.savings_balance ?? 0) > 0 },
+                                    { label: 'Copra Sales YTD', value: `₱${(viewMember.copra_sales_ytd ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` },
+                                ] as Array<{ label: string; value: string; highlight?: boolean }>).map((row) => (
                                     <div key={row.label} className="flex justify-between items-center py-2.5 border-b border-zinc-50 last:border-0">
                                         <span className="text-sm text-zinc-500 shrink-0">{row.label}</span>
-                                        <span className="text-sm font-medium text-zinc-800 capitalize">{row.value}</span>
+                                        <span className={`text-sm font-medium capitalize ${
+                                            row.highlight ? 'text-[#2d5a27]' : 'text-zinc-800'
+                                        }`}>
+                                            {row.value}
+                                        </span>
                                     </div>
                                 ))}
+
+                                {/* Loan eligibility indicator */}
+                                <div className="mt-3 pt-3 border-t border-zinc-100">
+                                    <div className={`rounded-xl px-3 py-2 text-xs ${
+                                        (viewMember.share_capital ?? 0) >= 20000
+                                            ? 'bg-[#2d5a27]/5 text-[#2d5a27]'
+                                            : 'bg-amber-50 text-amber-700'
+                                    }`}>
+                                        {(viewMember.share_capital ?? 0) >= 20000
+                                            ? '✓ Meets ₱20,000 capital share requirement for loans'
+                                            : `⚠ Needs ₱${(20000 - (viewMember.share_capital ?? 0)).toLocaleString()} more capital share for loan eligibility`}
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Loan History */}
@@ -335,14 +360,14 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
                                                 <div className="flex items-center justify-between">
                                                     <span className="text-sm font-semibold text-zinc-700">Loan #{loan.id}</span>
                                                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${
-                                                        loan.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
+                                                        loan.status === 'active'     ? 'bg-emerald-100 text-emerald-700' :
                                                         loan.status === 'fully_paid' ? 'bg-zinc-100 text-zinc-600' :
                                                         'bg-red-100 text-red-600'
                                                     }`}>{loan.status.replace('_', ' ')}</span>
                                                 </div>
                                                 <div className="mt-1 flex justify-between text-xs text-zinc-500">
-                                                    <span>Principal: ?{loan.principal_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                                                    <span>Balance: ?{loan.remaining_balance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                                                    <span>Principal: ₱{loan.principal_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                                                    <span>Balance: ₱{loan.remaining_balance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                                                 </div>
                                                 <p className="mt-0.5 text-xs text-zinc-400">{loan.created_at}</p>
                                             </div>
@@ -355,7 +380,7 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
                                 )}
                             </div>
 
-                            {/* Footer � Archive / Restore actions */}
+                            {/* Footer — Archive / Restore actions */}
                             <div className="p-6 space-y-2">
                                 {viewMember.is_archived ? (
                                     <div className="w-full flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 py-3 text-sm font-semibold text-zinc-500">
@@ -400,7 +425,7 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
                                 Manually set MIGS score for <strong className="text-zinc-700">{viewMember.name}</strong>
                             </p>
                             <div className="space-y-1.5">
-                                <Label>MIGS Score (0�100)</Label>
+                                <Label>MIGS Score (0–100)</Label>
                                 <input
                                     type="number"
                                     min={0}
@@ -436,11 +461,11 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
                                         ? 'bg-[#2d5a27]/10 text-[#2d5a27]'
                                         : 'bg-red-100 text-red-600'
                                 }`}>
-                                    {migsForm.migs_classification === 'migs' ? '? MIGS' : '? Non-MIGS'}
+                                    {migsForm.migs_classification === 'migs' ? '✓ MIGS' : '✗ Non-MIGS'}
                                 </span>
                             </div>
                             <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700">
-                                ? Manual override. Use "Recalculate" in the sheet to restore automatic scoring.
+                                ⚠ Manual override. Use "Recalculate" in the sheet to restore automatic scoring.
                             </div>
                         </div>
                     )}
@@ -512,7 +537,7 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
                         <Button variant="outline" onClick={() => setEditMember(null)}>Cancel</Button>
                         <Button
                             onClick={handleEditSave}
-                            className="bg-[#2d4734] hover:bg-[#1e3e1a] text-white"
+                            className="bg-[#2d5a27] hover:bg-[#1e3e1a] text-white"
                         >
                             Save Changes
                         </Button>
@@ -523,7 +548,7 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
             <div className="space-y-8 p-8 max-w-360 mx-auto">
                 {/* Header */}
                 <div className="border-b border-zinc-200 pb-6">
-                    <h1 className="text-3xl font-bold text-[#2d4734]">Member Management</h1>
+                    <h1 className="text-3xl font-bold text-[#2d5a27]">Member Management</h1>
                     <p className="mt-2 text-zinc-600 font-medium">
                         View and manage approved cooperative members
                     </p>
@@ -606,8 +631,8 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
                             className="h-9 rounded-lg border border-zinc-200 px-2 text-sm text-zinc-700 focus:ring-2 focus:ring-[#2d5a27] outline-none"
                         >
                             <option value="">All</option>
-                            <option value="regular">Regular</option>
-                            <option value="associate">Associate</option>
+                            <option value="member">Member</option>
+                            <option value="regular">Regular Member</option>
                         </select>
                     </div>
 
@@ -639,7 +664,7 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
                         </select>
                     </div>
 
-                    {/* Archive Year (only shown when archived view active) */}
+                    {/* Archive Year */}
                     {showArchived && stats.archive_years.length > 0 && (
                         <div className="space-y-1">
                             <label className="text-xs font-medium text-zinc-500">Archive Year</label>
@@ -690,5 +715,3 @@ export default function MemberManagementDashboard({ members, stats, filters }: P
         </>
     );
 }
-
-

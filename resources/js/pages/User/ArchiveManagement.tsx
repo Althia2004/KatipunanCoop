@@ -1,4 +1,4 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
+﻿import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     Archive, RotateCcw, Search, Eye, X,
@@ -91,11 +91,11 @@ export default function ArchiveManagement({ members, archiveYears, filters, stat
 
             {/* \u2500\u2500 View Sheet \u2500\u2500 */}
             <Sheet open={!!viewMember} onOpenChange={(o) => !o && setViewMember(null)}>
-                <SheetContent className="w-[420px] sm:w-[440px] overflow-y-auto p-0 border-l border-zinc-200 shadow-2xl">
+                <SheetContent className="w-105 sm:w-110 overflow-y-auto p-0 border-l border-zinc-200 shadow-2xl">
                     {viewMember && (
                         <>
                             {/* Header */}
-                            <div className="p-6 border-b border-zinc-100 bg-gradient-to-br from-amber-50 to-white">
+                            <div className="p-6 border-b border-zinc-100 bg-linear-to-br from-amber-50 to-white">
                                 <div className="flex items-start justify-between">
                                     <div>
                                         <p className="text-xs font-semibold uppercase tracking-widest text-amber-600 mb-1">
@@ -522,7 +522,7 @@ export default function ArchiveManagement({ members, archiveYears, filters, stat
                                     <td className="px-4 py-3.5">
                                         <p className="font-semibold text-zinc-800 group-hover:text-[#2d5a27] transition">{m.name}</p>
                                         <p className="text-xs text-zinc-400 mt-0.5 capitalize">
-                                            {m.gender} <span className="mx-0.5 text-zinc-300">•</span> {m.standing}
+                                            {m.gender} <span className="mx-0.5 text-zinc-300">â€¢</span> {m.standing}
                                         </p>
                                     </td>
                                     <td className="px-4 py-3.5">

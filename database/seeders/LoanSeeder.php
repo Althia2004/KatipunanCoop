@@ -73,7 +73,7 @@ class LoanSeeder extends Seeder
             'term_months'       => 24,
             'total_payable'     => 22000.00,
             'remaining_balance' => 22000.00,
-            'status'            => 'defaulted',
+            'status'            => 'arrears',
         ]);
     }
 }

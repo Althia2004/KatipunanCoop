@@ -15,115 +15,63 @@ use Inertia\Response;
 
 class MemberController extends Controller
 {
-    /**
-     * Index: Get approved members only (ADMIN USE)
-     */
     public function index(): JsonResponse
     {
-        $members = Member::where('status', Member::STATUS_APPROVED)
-            ->latest()
-            ->get();
-
-        return response()->json([
-            'data' => $members,
-        ]);
+        $members = Member::where('status', Member::STATUS_APPROVED)->latest()->get();
+        return response()->json(['data' => $members]);
     }
 
-    /**
-     * Pending: Get pending members only (SUPERADMIN USE)
-     */
     public function pending(): JsonResponse
     {
-        $members = Member::where('status', Member::STATUS_PENDING)
-            ->latest()
-            ->get();
-
-        return response()->json([
-            'data' => $members,
-        ]);
+        $members = Member::where('status', Member::STATUS_PENDING)->latest()->get();
+        return response()->json(['data' => $members]);
     }
 
-    /**
-     * Store: Create a new member (status = pending)
-     */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'gender' => 'required|in:male,female,other',
-            'start_date' => 'nullable|date',
-            'standing' => 'required|string|max:255',
+            'name'              => 'required|string|max:255',
+            'gender'            => 'required|in:male,female,other',
+            'start_date'        => 'nullable|date',
+            'standing'          => 'required|string|max:255',
             'membership_status' => 'required|in:good,warning,non-compliant',
         ]);
 
-        $member = Member::create([
-            ...$validated,
-            'status' => Member::STATUS_PENDING,
-        ]);
+        $member = Member::create([...$validated, 'status' => Member::STATUS_PENDING]);
 
-        return response()->json([
-            'data' => $member,
-            'message' => 'Member created successfully.',
-        ], 201);
+        return response()->json(['data' => $member, 'message' => 'Member created successfully.'], 201);
     }
 
-    /**
-     * Update: Update an existing member
-     */
     public function update(Request $request, Member $member): JsonResponse
     {
         $validated = $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'gender' => 'sometimes|in:male,female,other',
-            'start_date' => 'sometimes|nullable|date',
-            'standing' => 'sometimes|string|max:255',
+            'name'              => 'sometimes|string|max:255',
+            'gender'            => 'sometimes|in:male,female,other',
+            'start_date'        => 'sometimes|nullable|date',
+            'standing'          => 'sometimes|string|max:255',
             'membership_status' => 'sometimes|in:good,warning,non-compliant',
         ]);
 
         $member->update($validated);
-
-        return response()->json([
-            'data' => $member,
-            'message' => 'Member updated successfully.',
-        ]);
+        return response()->json(['data' => $member, 'message' => 'Member updated successfully.']);
     }
 
-    /**
-     * Destroy: Delete a member
-     */
     public function destroy(Member $member): JsonResponse
     {
         $member->delete();
-
-        return response()->json([
-            'message' => 'Member deleted successfully.',
-        ]);
+        return response()->json(['message' => 'Member deleted successfully.']);
     }
 
-    /**
-     * Approve: Set status to approved
-     */
     public function approve(Member $member): JsonResponse
     {
         $member->update(['status' => Member::STATUS_APPROVED]);
-
-        return response()->json([
-            'data' => $member,
-            'message' => 'Member approved successfully.',
-        ]);
+        return response()->json(['data' => $member, 'message' => 'Member approved successfully.']);
     }
 
-    /**
-     * Reject: Set status to rejected
-     */
     public function reject(Member $member): JsonResponse
     {
         $member->update(['status' => Member::STATUS_REJECTED]);
-
-        return response()->json([
-            'data' => $member,
-            'message' => 'Member rejected successfully.',
-        ]);
+        return response()->json(['data' => $member, 'message' => 'Member rejected successfully.']);
     }
 
     // ── Inertia page ──────────────────────────────────────────────────────────
@@ -270,9 +218,7 @@ class MemberController extends Controller
             ]);
         }
 
-        activity()->causedBy(auth()->user())
-            ->performedOn($member)
-            ->log('Member record updated');
+        activity()->causedBy(auth()->user())->performedOn($member)->log('Member record updated');
 
         return back()->with('success', 'Member updated successfully.');
     }
@@ -308,9 +254,6 @@ class MemberController extends Controller
         return back()->with('success', 'MIGS score recalculated: ' . $result->migs_score . '/100.');
     }
 
-    /**
-     * Toggle member status between active and suspended (Inertia PATCH).
-     */
     public function toggleStatus(Member $member): RedirectResponse
     {
         $newStatus = $member->status === Member::STATUS_INACTIVE
@@ -450,17 +393,14 @@ class MemberController extends Controller
         $search = $request->input('search', '');
         $status = $request->input('status', '');
 
-        $query = LoanAmortization::with(['loan.borrower'])
-            ->orderBy('due_date', 'asc');
+        $query = LoanAmortization::with(['loan.borrower'])->orderBy('due_date', 'asc');
 
         if ($status && $status !== 'all') {
             $query->where('status', $status);
         }
 
         if ($search) {
-            $query->whereHas('loan.borrower', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%");
-            });
+            $query->whereHas('loan.borrower', fn($q) => $q->where('name', 'like', "%{$search}%"));
         }
 
         $amortizations = $query->paginate(20)->through(fn ($a) => [
@@ -475,17 +415,15 @@ class MemberController extends Controller
             'paid_at'        => $a->updated_at?->format('M d, Y'),
         ]);
 
-        $stats = [
-            'total'   => LoanAmortization::count(),
-            'pending' => LoanAmortization::where('status', 'pending')->count(),
-            'paid'    => LoanAmortization::where('status', 'paid')->count(),
-            'overdue' => LoanAmortization::where('status', 'overdue')->count(),
-        ];
-
         return Inertia::render('User/Amortization', [
             'amortizations' => $amortizations,
-            'stats'         => $stats,
-            'filters'       => ['search' => $search, 'status' => $status],
+            'stats' => [
+                'total'   => LoanAmortization::count(),
+                'pending' => LoanAmortization::where('status', 'pending')->count(),
+                'paid'    => LoanAmortization::where('status', 'paid')->count(),
+                'overdue' => LoanAmortization::where('status', 'overdue')->count(),
+            ],
+            'filters' => ['search' => $search, 'status' => $status],
         ]);
     }
 
@@ -536,13 +474,13 @@ class MemberController extends Controller
             ]);
 
         return Inertia::render('User/SavingsInterest', [
-            'members'          => $members->values(),
-            'year'             => $year,
-            'caRate'           => $caRate,
-            'totalMembers'     => $members->count(),
-            'totalSavings'     => $members->sum('savings_balance'),
-            'totalInterest'    => $members->sum('interest_earned'),
-            'availableYears'   => range(now()->year, now()->year - 5),
+            'members'        => $members->values(),
+            'year'           => $year,
+            'caRate'         => $caRate,
+            'totalMembers'   => $members->count(),
+            'totalSavings'   => $members->sum('savings_balance'),
+            'totalInterest'  => $members->sum('interest_earned'),
+            'availableYears' => range(now()->year, now()->year - 5),
         ]);
     }
 
@@ -642,8 +580,8 @@ class MemberController extends Controller
 
     public function patronageReports(Request $request): Response
     {
-        $year        = (int) $request->input('year', now()->year);
-        $totalCopra  = (float) (Member::sum('copra_sales_ytd') ?? 0);
+        $year       = (int) $request->input('year', now()->year);
+        $totalCopra = (float) (Member::sum('copra_sales_ytd') ?? 0);
 
         $members = Member::with('memberRegistration')
             ->whereNotIn('status', [Member::STATUS_PENDING, Member::STATUS_REJECTED])
@@ -869,6 +807,8 @@ class MemberController extends Controller
             ],
             'members' => $borrowers,
             'filters' => ['search' => $search, 'method' => $method],
+            'members' => $borrowers,
+            'filters' => ['search' => $search, 'method' => $method],
         ]);
     }
 
@@ -903,8 +843,10 @@ class MemberController extends Controller
         $payment = LoanPayment::create($validated);
 
         $newBalance = max(0, ((float) $loan->remaining_balance) - ((float) $validated['amount_paid']));
+
         $loan->update([
             'remaining_balance' => $newBalance,
+            'status'            => $newBalance <= 0 ? 'fully_paid' : $loan->status,
             'status'            => $newBalance <= 0 ? 'fully_paid' : $loan->status,
         ]);
 
@@ -924,6 +866,12 @@ class MemberController extends Controller
         if ($member) {
             app(\App\Services\MigsScoreService::class)->recalculate($member);
         }
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($payment)
+            ->log('Payment of ₱' . number_format($validated['amount_paid'], 2) .
+                ' recorded for Loan #' . $validated['loan_id'] .
+                ' via ' . $validated['payment_method']);
 
         activity()->causedBy(auth()->user())
             ->performedOn($payment)

@@ -23,7 +23,7 @@ class Member extends Model
     const STATUS_ARCHIVED         = 'archived';
     const STATUS_PENDING_ARCHIVE  = 'pending_archive';
     const STATUS_PENDING_RESTORE  = 'pending_restore';
-
+    const CAPITAL_SHARE_TARGET = 20000.00;
     // Membership Status constants
     const MEMBERSHIP_GOOD = 'good';
     const MEMBERSHIP_WARNING = 'warning';
@@ -102,34 +102,32 @@ class Member extends Model
      * Upgrade member to Regular status when share_capital ≥ capital_share_target.
      * Safe to call multiple times — only acts when conditions are met.
      */
-    public function checkAndUpgradeToRegular(): void
-    {
-        if ($this->status === self::STATUS_REGULAR) return;
+  public function checkAndUpgradeToRegular(): void
+{
+    if ($this->status === self::STATUS_REGULAR) return;
 
-        $target = (float) ($this->attributes['capital_share_target'] ?? 10000);
-        $paid   = (float) ($this->attributes['share_capital'] ?? 0);
+    $target = (float) ($this->attributes['capital_share_target'] ?? self::CAPITAL_SHARE_TARGET); // ← here
+    $paid   = (float) ($this->attributes['share_capital'] ?? 0);
 
-        if ($paid >= $target) {
-            $this->update(['status' => self::STATUS_REGULAR]);
-        }
+    if ($paid >= $target) {
+        $this->update(['status' => self::STATUS_REGULAR]);
     }
+}
 
-    // ── Capital Share computed attributes ────────────────────────────────────
+public function getCapitalShareProgressAttribute(): float
+{
+    $target = (float) ($this->attributes['capital_share_target'] ?? self::CAPITAL_SHARE_TARGET); // ← here
+    if ($target <= 0) return 100.0;
+    $paid = (float) ($this->attributes['share_capital'] ?? 0);
+    return min(100.0, round(($paid / $target) * 100, 2));
+}
 
-    public function getCapitalShareProgressAttribute(): float
-    {
-        $target = (float) ($this->attributes['capital_share_target'] ?? 10000);
-        if ($target <= 0) return 100.0;
-        $paid = (float) ($this->attributes['share_capital'] ?? 0);
-        return min(100.0, round(($paid / $target) * 100, 2));
-    }
-
-    public function getCapitalShareRemainingAttribute(): float
-    {
-        $target = (float) ($this->attributes['capital_share_target'] ?? 10000);
-        $paid   = (float) ($this->attributes['share_capital'] ?? 0);
-        return max(0.0, $target - $paid);
-    }
+public function getCapitalShareRemainingAttribute(): float
+{
+    $target = (float) ($this->attributes['capital_share_target'] ?? self::CAPITAL_SHARE_TARGET); // ← here
+    $paid   = (float) ($this->attributes['share_capital'] ?? 0);
+    return max(0.0, $target - $paid);
+}
 
     // ── Relationships ─────────────────────────────────────────────────────────
 
@@ -196,21 +194,26 @@ class Member extends Model
         ]);
     }
 
-    public function restore(): void
-    {
-        $this->update([
-            'is_archived'            => false,
-            'status'                 => self::STATUS_MEMBER,
-            'archived_at'            => null,
-            'archived_by'            => null,
-            'archive_reason'         => null,
-            'archive_year'           => null,
-            'restore_requested'      => false,
-            'restore_requested_at'   => null,
-            'restore_requested_by'   => null,
-            'restore_request_reason' => null,
-        ]);
-    }
+   public function restore(): void
+{
+    // Determine correct status to restore to
+    $restoreStatus = $this->share_capital >= $this->capital_share_target
+        ? self::STATUS_REGULAR
+        : self::STATUS_MEMBER;
+
+    $this->update([
+        'is_archived'            => false,
+        'status'                 => $restoreStatus, // ← smart restore
+        'archived_at'            => null,
+        'archived_by'            => null,
+        'archive_reason'         => null,
+        'archive_year'           => null,
+        'restore_requested'      => false,
+        'restore_requested_at'   => null,
+        'restore_requested_by'   => null,
+        'restore_request_reason' => null,
+    ]);
+}
 
     public function requestArchive(string $reason, int $requestedBy): bool
     {

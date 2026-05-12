@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react';
+﻿import type { FormEvent } from 'react';
 import { Head, useForm } from '@inertiajs/react';
 
 const LOAN_TYPES = [
@@ -77,7 +77,7 @@ export default function Request() {
                         value={data.purpose}
                         placeholder="Explain why this loan is needed"
                         onChange={(e) => setData('purpose', e.target.value)}
-                        className={`w-full text-zinc-900 bg-zinc-50 rounded-xl border-zinc-300 p-3 min-h-[120px] focus:ring-[#4c9f5f] focus:border-[#4c9f5f] transition-all ${
+                        className={`w-full text-zinc-900 bg-zinc-50 rounded-xl border-zinc-300 p-3 min-h-30 focus:ring-[#4c9f5f] focus:border-[#4c9f5f] transition-all ${
                             errors.purpose ? 'border-red-500 ring-1 ring-red-500' : ''
                         }`}
                     />

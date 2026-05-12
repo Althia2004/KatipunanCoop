@@ -21,6 +21,11 @@ return new class extends Migration
             $table->text('purpose')->nullable();
             $table->integer('term_months')->default(12);
             $table->decimal('interest_rate', 10, 2)->default(1.00);
+
+            $table->text('rejection_reason')->nullable();
+            $table->text('escalation_notes')->nullable();
+            $table->foreignId('reviewed_by')->nullable()->constrained('users');
+            $table->timestamp('reviewed_at')->nullable();
         });
     }
 

@@ -84,7 +84,7 @@ type LoanStatus = LoanItem['status'];
 const STATUS_LABEL: Record<LoanStatus, string> = {
     active:     'Active',
     fully_paid: 'Fully Paid',
-    defaulted:  'Defaulted',
+    defaulted:  'Arrears',
 };
 
 const STATUS_BADGE: Record<LoanStatus, string> = {

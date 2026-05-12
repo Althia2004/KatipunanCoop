@@ -1,6 +1,7 @@
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
-import { CreditCard, ChevronDown, ChevronUp, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { CreditCard, ChevronDown, ChevronUp, CheckCircle2, AlertCircle, Clock, TrendingUp } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import MemberLayout from '@/layouts/MemberLayout';
 
 interface Amortization {
@@ -25,10 +26,21 @@ interface LoanRow {
     amortizations: Amortization[];
 }
 
+interface CapitalShare {
+    paid: number;
+    target: number;
+    percent: number;
+    remaining: number;
+    frequency: string | null;
+    is_regular: boolean;
+    status: string;
+}
+
 interface Props {
     user: { name: string; email: string };
     member: { name: string };
     loans: LoanRow[];
+    capitalShare: CapitalShare;
 }
 
 const fmt = (n: number) =>
@@ -51,7 +63,7 @@ const amorStatusIcon = (status: string) => {
     return <Clock className="w-3.5 h-3.5 text-zinc-400" />;
 };
 
-export default function MemberLoans({ user, member, loans }: Props) {
+export default function MemberLoans({ user, member, loans, capitalShare }: Props) {
     const [expandedId, setExpandedId] = useState<number | null>(loans[0]?.id ?? null);
 
     return (
@@ -64,6 +76,43 @@ export default function MemberLoans({ user, member, loans }: Props) {
                     <p className="text-zinc-500 text-sm mt-0.5">View all your loan details and amortization schedules.</p>
                 </div>
 
+                {/* Capital Share Progress / Eligibility Banner */}
+                            <div className="bg-green-50 border border-green-200 rounded-xl p-5 space-y-4">
+                    <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
+                            <TrendingUp className="w-4 h-4 text-[#2d5a27]" />
+                        </div>
+                        <div>
+                            <p className="font-semibold text-green-900 text-sm">Capital Share Progress</p>
+                            <p className="text-green-700 text-xs mt-0.5">Complete your capital share to unlock loan eligibility</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <div className="flex justify-between text-xs text-green-700">
+                            <span>{fmt(capitalShare.paid)} paid of {fmt(capitalShare.target)} target</span>
+                            <span>{Math.round(capitalShare.percent)}%</span>
+                        </div>
+                        <Progress value={capitalShare.percent} className="h-2 bg-green-100 [&>div]:bg-[#2d5a27]" />
+                        <p className="text-xs text-green-700">{fmt(capitalShare.remaining)} remaining</p>
+                    </div>
+
+                    {capitalShare.frequency && (
+                        <p className="text-xs text-green-700">Payment frequency: <span className="font-medium capitalize">{capitalShare.frequency}</span></p>
+                    )}
+
+                    <div className="pt-1 space-y-2">
+                        <button
+                            disabled
+                            className="w-full sm:w-auto px-5 py-2 rounded-xl text-sm font-semibold bg-zinc-200 text-zinc-400 cursor-not-allowed"
+                        >
+                            Apply for Loan
+                        </button>
+                        <p className="text-xs text-green-700">
+                            You need {fmt(capitalShare.remaining)} more in capital share before you can apply for a loan.
+                        </p>
+                    </div>
+                </div>
                 {loans.length === 0 ? (
                     <div className="bg-white rounded-xl border border-zinc-100 shadow-sm py-16 text-center">
                         <CreditCard className="w-12 h-12 text-zinc-200 mx-auto mb-3" />
