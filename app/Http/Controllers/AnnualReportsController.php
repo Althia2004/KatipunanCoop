@@ -187,5 +187,32 @@ class AnnualReportsController extends Controller
 
         return back();
     }
+
+    public function store(Request $request): RedirectResponse
+{
+    $validated = $request->validate([
+        'topic'      => ['required', 'string', 'max:255'],
+        'host'       => ['required', 'string', 'max:255'],
+        'date'       => ['required', 'date'],
+        'time_start' => ['required', 'date_format:H:i'],
+        'time_end'   => ['nullable', 'date_format:H:i', 'after:time_start'],
+        'status'     => ['required', 'in:scheduled,completed,cancelled'],
+        'overview'   => ['nullable', 'string'],
+    ]);
+
+    AnnualMeeting::create($validated);
+
+    activity()->causedBy(auth()->user())
+        ->log('Annual meeting report created: ' . $validated['topic']);
+
+    return back()->with('success', 'Annual meeting report created successfully.');
+    }
+
+   public function superadminIndex(): Response
+{
+    return Inertia::render('Superadmin/AnnualReports', [
+        'meetings' => AnnualMeeting::latest('date')->paginate(10),
+    ]);
+}
 }
 
