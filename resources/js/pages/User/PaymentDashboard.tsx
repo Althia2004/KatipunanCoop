@@ -21,9 +21,9 @@ interface LoanOption {
 interface MemberOption {
     id: number;
     name: string;
+    share_capital: number;
+    savings_balance: number;
     loans: LoanOption[];
-    share_capital?: number;
-    savings_balance?: number;
 }
 
 interface Payment {
@@ -40,7 +40,7 @@ interface Payment {
     updated_by_name: string | null;
     recorded_at: string;
     updated_at: string;
-    category?: string;
+    category: 'loan' | 'capital_share';
 }
 
 interface PaginationLink {
@@ -111,8 +111,8 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
     const { props } = usePage<{ flash?: { success?: string } }>();
     const flash = props.flash;
 
-    const [search, setSearch]   = useState(filters.search ?? '');
-    const [method, setMethod]   = useState(filters.method ?? '');
+    const [search, setSearch] = useState(filters.search ?? '');
+    const [method, setMethod] = useState(filters.method ?? '');
 
     // Add dialog
     const [addOpen, setAddOpen]                   = useState(false);
@@ -147,9 +147,12 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
         setAddOpen(true);
     };
 
-    const isAddValid = () => {
+    const isAddValid = (): boolean => {
         if (!selectedMemberId || !form.amount_paid || !form.payment_date) return false;
-        if (paymentCategory === 'loan' && !form.loan_id) return false;
+        if (paymentCategory === 'loan') {
+            if ((selectedMember?.share_capital ?? 0) < 20000) return false;
+            if (!form.loan_id) return false;
+        }
         if (form.payment_type === 'online' && !form.reference_number) return false;
         return true;
     };
@@ -157,9 +160,9 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
     const handleSubmitAdd = () => {
         setSubmitting(true);
         if (paymentCategory === 'capital_share') {
-            router.post('/user/payments/capital-share', {
+            router.post('/user/payments/capital', {
                 member_id:        selectedMemberId,
-                amount:           form.amount_paid,
+                amount_paid:      form.amount_paid,
                 payment_date:     form.payment_date,
                 payment_method:   form.payment_method,
                 payment_type:     form.payment_type,
@@ -182,7 +185,7 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
     const handleEdit = (p: Payment) => {
         setEditTarget(p);
         setEditForm({
-            loan_id:          p.loan_id?.toString() ?? '',
+            loan_id:          (p.loan_id ?? '').toString(),
             amount_paid:      p.amount_paid.toString(),
             payment_date:     p.payment_date,
             payment_method:   p.payment_method,
@@ -302,7 +305,7 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                                     <td className="px-5 py-3.5 font-medium text-zinc-800">{p.member_name}</td>
                                     <td className="px-5 py-3.5 text-zinc-500">
                                         {p.loan_id ? `#${p.loan_id}` : (
-                                            <span className="text-xs px-2 py-0.5 rounded-full bg-[#c8920a]/10 text-[#c8920a] font-semibold">
+                                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-[#c8920a]/10 text-[#c8920a]">
                                                 Capital
                                             </span>
                                         )}
@@ -326,7 +329,7 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                                     <td className="px-5 py-3.5 text-zinc-500 text-xs">{p.recorded_by_name}</td>
                                     <td className="px-5 py-3.5">
                                         <div className="flex gap-1">
-                                            <a href={`/user/payments/${p.id}/receipt`} target="_blank" rel="noopener noreferrer">
+                                            <a href={`/user/payments/${p.id}/receipt?type=${p.category === 'capital_share' ? 'capital_share' : 'loan'}`} target="_blank" rel="noopener noreferrer">
                                                 <button className="flex items-center gap-1 h-7 px-2 text-xs border border-zinc-200 rounded-lg text-zinc-600 hover:bg-zinc-50 transition">
                                                     <Receipt className="w-3 h-3" /> Receipt
                                                 </button>
@@ -372,35 +375,34 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                         <DialogTitle>Record Payment</DialogTitle>
                     </DialogHeader>
 
-                    {/* Payment Category Toggle */}
-                    <div className="flex gap-1 p-1 bg-zinc-100 rounded-xl">
-                        <button
-                            type="button"
-                            onClick={() => setPaymentCategory('loan')}
-                            className={`flex-1 py-2 text-sm font-semibold rounded-lg transition ${
-                                paymentCategory === 'loan'
-                                    ? 'bg-white text-[#2d5a27] shadow-sm'
-                                    : 'text-zinc-500 hover:text-zinc-700'
-                            }`}
-                        >
-                             Loan Payment
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setPaymentCategory('capital_share')}
-                            className={`flex-1 py-2 text-sm font-semibold rounded-lg transition ${
-                                paymentCategory === 'capital_share'
-                                    ? 'bg-white text-[#c8920a] shadow-sm'
-                                    : 'text-zinc-500 hover:text-zinc-700'
-                            }`}
-                        >
-                             Capital Share
-                        </button>
-                    </div>
-
                     <div className="space-y-4 py-2">
+                        {/* Payment Category Toggle */}
+                        <div className="flex gap-1 p-1 bg-zinc-100 rounded-xl">
+                            <button
+                                type="button"
+                                onClick={() => { setPaymentCategory('loan'); setForm(f => ({ ...f, loan_id: '' })); }}
+                                className={`flex-1 py-2 text-sm font-semibold rounded-lg transition ${
+                                    paymentCategory === 'loan'
+                                        ? 'bg-white text-[#2d5a27] shadow-sm'
+                                        : 'text-zinc-500 hover:text-zinc-700'
+                                }`}
+                            >
+                                 Loan Payment
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setPaymentCategory('capital_share'); setForm(f => ({ ...f, loan_id: '' })); }}
+                                className={`flex-1 py-2 text-sm font-semibold rounded-lg transition ${
+                                    paymentCategory === 'capital_share'
+                                        ? 'bg-white text-[#c8920a] shadow-sm'
+                                        : 'text-zinc-500 hover:text-zinc-700'
+                                }`}
+                            >
+                                 Capital Share
+                            </button>
+                        </div>
 
-                        {/* Member */}
+                        {/* Member selector */}
                         <div className="space-y-1.5">
                             <Label>Member</Label>
                             <select
@@ -418,37 +420,76 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                             </select>
                         </div>
 
-                        {/* Loan — only for loan payments */}
+                        {/* ── LOAN PAYMENT BRANCH ── */}
                         {paymentCategory === 'loan' && (
-                            <div className="space-y-1.5">
-                                <Label>Loan</Label>
-                                <select
-                                    value={form.loan_id}
-                                    onChange={(e) => setForm((f) => ({ ...f, loan_id: e.target.value }))}
-                                    className="w-full h-9 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-700 focus:ring-2 focus:ring-[#2d5a27] outline-none"
-                                    disabled={!selectedMemberId}
-                                >
-                                    <option value="">— Select Loan —</option>
-                                    {activeLoans.map((l) => (
-                                        <option key={l.id} value={l.id}>
-                                            Loan #{l.id} — Balance: {fmt(l.remaining_balance)}
-                                        </option>
-                                    ))}
-                                </select>
-                                {selectedMemberId && activeLoans.length === 0 && (
-                                    <p className="text-xs text-amber-600">⚠ This member has no active loans.</p>
+                            <>
+                                {/* Capital share warning — block if < 20,000 */}
+                                {selectedMember && (selectedMember.share_capital ?? 0) < 20000 && (
+                                    <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                                        <span className="text-red-500 shrink-0 mt-0.5">⛔</span>
+                                        <div>
+                                            <p className="text-sm font-semibold text-red-700">Cannot Record Loan Payment</p>
+                                            <p className="text-xs text-red-600 mt-0.5">
+                                                {selectedMember.name}'s capital share is{' '}
+                                                <strong>₱{(selectedMember.share_capital ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</strong>
+                                                , which is below the required <strong>₱20,000.00</strong> minimum.
+                                            </p>
+                                            <p className="text-xs text-red-500 mt-1">
+                                                Record a capital share payment first to reach the ₱20,000 minimum.
+                                            </p>
+                                        </div>
+                                    </div>
                                 )}
-                            </div>
+
+                                {/* Capital share met — green check */}
+                                {selectedMember && (selectedMember.share_capital ?? 0) >= 20000 && (
+                                    <div className="flex items-center gap-2 bg-[#2d5a27]/5 border border-[#2d5a27]/20 rounded-xl px-4 py-2">
+                                        <span className="text-[#2d5a27]">✓</span>
+                                        <p className="text-xs text-[#2d5a27] font-medium">
+                                            Capital share ₱{(selectedMember.share_capital ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })} — meets ₱20,000 requirement
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Loan selector */}
+                                <div className="space-y-1.5">
+                                    <Label>Loan</Label>
+                                    <select
+                                        value={form.loan_id}
+                                        onChange={(e) => setForm((f) => ({ ...f, loan_id: e.target.value }))}
+                                        className="w-full h-9 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-700 focus:ring-2 focus:ring-[#2d5a27] outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+                                        disabled={!selectedMemberId || (selectedMember?.share_capital ?? 0) < 20000}
+                                    >
+                                        <option value="">— Select Loan —</option>
+                                        {activeLoans.map((l) => (
+                                            <option key={l.id} value={l.id}>
+                                                Loan #{l.id} — Balance: ₱{l.remaining_balance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {selectedMemberId && activeLoans.length === 0 && (selectedMember?.share_capital ?? 0) >= 20000 && (
+                                        <p className="text-xs text-amber-600">⚠ This member has no active loans.</p>
+                                    )}
+                                </div>
+                            </>
                         )}
 
-                        {/* Capital Share info */}
+                        {/* ── CAPITAL SHARE BRANCH ── */}
                         {paymentCategory === 'capital_share' && selectedMember && (
-                            <div className="bg-[#c8920a]/10 border border-[#c8920a]/20 rounded-xl p-3">
+                            <div className="bg-[#c8920a]/10 border border-[#c8920a]/20 rounded-xl p-3 space-y-1">
                                 <p className="text-xs text-zinc-500">Current Capital Share</p>
-                                <p className="font-bold text-[#c8920a]">{fmt(selectedMember.share_capital ?? 0)}</p>
-                                {form.amount_paid && (
-                                    <p className="text-xs text-zinc-400 mt-1">
-                                        After payment: {fmt((selectedMember.share_capital ?? 0) + Number(form.amount_paid))}
+                                <p className="font-bold text-[#c8920a] text-lg">
+                                    ₱{(selectedMember.share_capital ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                                </p>
+                                {form.amount_paid && Number(form.amount_paid) > 0 && (
+                                    <p className="text-xs text-zinc-400">
+                                        After payment: ₱{((selectedMember.share_capital ?? 0) + Number(form.amount_paid))
+                                            .toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                                    </p>
+                                )}
+                                {(selectedMember.share_capital ?? 0) < 20000 && (
+                                    <p className="text-xs text-[#c8920a] font-medium">
+                                        ₱{(20000 - (selectedMember.share_capital ?? 0)).toLocaleString('en-PH', { minimumFractionDigits: 2 })} more needed to reach loan eligibility
                                     </p>
                                 )}
                             </div>
@@ -541,7 +582,7 @@ export default function PaymentDashboard({ payments, stats, members, filters }: 
                             disabled={submitting || !isAddValid()}
                             className="px-4 py-2 bg-[#2d5a27] text-white text-sm font-semibold rounded-xl hover:bg-[#234820] transition disabled:opacity-50"
                         >
-                            {submitting ? 'Saving…' : 'Record Payment'}
+                            {submitting ? 'Saving…' : paymentCategory === 'capital_share' ? 'Record Capital Share' : 'Record Payment'}
                         </button>
                     </DialogFooter>
                 </DialogContent>

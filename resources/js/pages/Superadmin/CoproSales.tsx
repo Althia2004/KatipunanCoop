@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
 import {
-    Leaf, Plus, Trash2, ChevronDown, ChevronUp, Scale, TrendingUp, Package, Receipt,
+    Leaf, Plus, Trash2, ChevronDown, ChevronUp, Scale, TrendingUp, Package, Receipt, Pencil,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,13 +9,18 @@ import { Badge } from '@/components/ui/badge';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
+import CopraSalesFilters from '@/components/copra-sales/CopraSalesFilters';
+import { deleteSale as deleteSaleRequest, generateReport } from '@/services/copraSalesService';
 
 interface Sale {
     id: number;
     sale_date: string;
+    sale_date_formatted: string;
+    classification: string;
     kilos: number;
     price_per_kilo: number;
     gross_amount: number;
+    total_amount: number;
     deduction_amount: number;
     deduction_type: string | null;
     net_amount: number;
@@ -43,6 +48,12 @@ interface Props {
     year: number;
     years: number[];
     stats: Stats;
+    filters: {
+        search: string;
+        month: number;
+        classification: string;
+        sale_date: string;
+    };
 }
 
 const fmt = (n: number) =>
@@ -51,16 +62,21 @@ const fmt = (n: number) =>
 const fmtKg = (n: number) =>
     n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kg';
 
-export default function CoproSales({ members, year, years, stats }: Props) {
+export default function CoproSales({ members, year, years, stats, filters }: Props) {
     const [expandedId, setExpandedId] = useState<number | null>(null);
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = useState(filters.search);
+    const [filterMonth, setFilterMonth] = useState(filters.month);
+    const [classificationFilter, setClassificationFilter] = useState(filters.classification);
+    const [saleDateFilter, setSaleDateFilter] = useState(filters.sale_date);
     const [showDialog, setShowDialog] = useState(false);
     const [dialogMember, setDialogMember] = useState<MemberRow | null>(null);
+    const [editingSale, setEditingSale] = useState<Sale | null>(null);
 
-    const { data, setData, post, processing, errors, reset } = useForm({
+    const { data, setData, post, put, processing, errors, reset } = useForm({
         sale_date: new Date().toISOString().slice(0, 10),
         kilos: '',
         price_per_kilo: '',
+        classification: 'NON-MIGS',
         deduction_amount: '',
         deduction_type: '',
         remarks: '',
@@ -72,25 +88,127 @@ export default function CoproSales({ members, year, years, stats }: Props) {
 
     function openDialog(member: MemberRow) {
         setDialogMember(member);
-        reset();
+        setEditingSale(null);
+        reset({
+            sale_date: new Date().toISOString().slice(0, 10),
+            kilos: '',
+            price_per_kilo: '',
+            classification: 'NON-MIGS',
+            deduction_amount: '',
+            deduction_type: '',
+            remarks: '',
+        });
+        setShowDialog(true);
+    }
+
+    function openEditDialog(member: MemberRow, sale: Sale) {
+        setDialogMember(member);
+        setEditingSale(sale);
+        reset({
+            sale_date: sale.sale_date,
+            kilos: sale.kilos.toString(),
+            price_per_kilo: sale.price_per_kilo.toString(),
+            classification: sale.classification,
+            deduction_amount: sale.deduction_amount.toString(),
+            deduction_type: sale.deduction_type || '',
+            remarks: sale.remarks || '',
+        });
         setShowDialog(true);
     }
 
     function submitSale(e: React.FormEvent) {
         e.preventDefault();
         if (!dialogMember) return;
+
+        if (editingSale) {
+            put(`/superadmin/copra-sales/${editingSale.id}`, {
+                ...data,
+            }, {
+                onSuccess: () => {
+                    setShowDialog(false);
+                    setEditingSale(null);
+                    reset({
+                        sale_date: new Date().toISOString().slice(0, 10),
+                        kilos: '',
+                        price_per_kilo: '',
+                        classification: 'NON-MIGS',
+                        deduction_amount: '',
+                        deduction_type: '',
+                        remarks: '',
+                    });
+                },
+            });
+            return;
+        }
+
         post(`/superadmin/copra-sales/${dialogMember.id}`, {
-            onSuccess: () => { setShowDialog(false); reset(); },
+            onSuccess: () => {
+                setShowDialog(false);
+                reset({
+                    sale_date: new Date().toISOString().slice(0, 10),
+                    kilos: '',
+                    price_per_kilo: '',
+                    classification: 'NON-MIGS',
+                    deduction_amount: '',
+                    deduction_type: '',
+                    remarks: '',
+                });
+            },
         });
     }
 
-    function deleteSale(saleId: number) {
+    async function deleteSale(saleId: number) {
         if (!confirm('Delete this copra sale record?')) return;
-        router.delete(`/superadmin/copra-sales/${saleId}`);
+
+        try {
+            await deleteSaleRequest(saleId);
+            router.reload();
+        } catch (error) {
+            console.error(error);
+        }
     }
 
     function changeYear(y: string) {
-        router.get('/superadmin/copra-sales', { year: y }, { preserveState: true });
+        router.get('/superadmin/copra-sales', {
+            year: y,
+            month: filterMonth,
+            classification: classificationFilter,
+            search,
+            sale_date: saleDateFilter,
+        }, { preserveState: true });
+    }
+
+    function refreshFilters() {
+        router.get('/superadmin/copra-sales', {
+            year,
+            month: filterMonth,
+            classification: classificationFilter,
+            search,
+            sale_date: saleDateFilter,
+        }, { preserveState: true });
+    }
+
+    async function downloadReportCsv(type: 'annual' | 'monthly' | 'member_contribution') {
+        try {
+            const response = await generateReport({
+                type,
+                year,
+                month: filterMonth || undefined,
+                classification: classificationFilter || undefined,
+            });
+
+            const blob = new Blob([response.data], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `copra_sales_${type}_${year}${filterMonth > 0 ? `_${filterMonth}` : ''}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error(error);
+        }
     }
 
     const filtered = members.filter(m =>
@@ -145,6 +263,46 @@ export default function CoproSales({ members, year, years, stats }: Props) {
                             <p className="text-xl font-bold text-zinc-900">{card.value}</p>
                         </div>
                     ))}
+                </div>
+
+                {/* Filters */}
+                <CopraSalesFilters
+                    search={search}
+                    month={filterMonth}
+                    classification={classificationFilter}
+                    saleDate={saleDateFilter}
+                    onSearch={value => setSearch(value)}
+                    onMonth={value => setFilterMonth(value)}
+                    onClassification={value => setClassificationFilter(value)}
+                    onSaleDate={value => setSaleDateFilter(value)}
+                />
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between px-4">
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => refreshFilters()}
+                        >
+                            Refresh filters
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            className="bg-[#2d5a27] hover:bg-[#2d5a27]/90 text-white"
+                            onClick={() => downloadReportCsv(filterMonth > 0 ? 'monthly' : 'annual')}
+                        >
+                            Download {filterMonth > 0 ? 'Monthly' : 'Annual'} Report
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            className="bg-[#c8920a] hover:bg-[#c8920a]/90 text-white"
+                            onClick={() => downloadReportCsv('member_contribution')}
+                        >
+                            Download Contribution Report
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Table */}
@@ -214,19 +372,25 @@ export default function CoproSales({ members, year, years, stats }: Props) {
                                                         <thead className="bg-zinc-100">
                                                             <tr>
                                                                 <th className="text-left px-3 py-2 font-semibold text-zinc-500">Date</th>
+                                                                <th className="text-left px-3 py-2 font-semibold text-zinc-500">Class</th>
                                                                 <th className="text-right px-3 py-2 font-semibold text-zinc-500">Kilos</th>
                                                                 <th className="text-right px-3 py-2 font-semibold text-zinc-500">Price/kg</th>
                                                                 <th className="text-right px-3 py-2 font-semibold text-zinc-500">Gross</th>
                                                                 <th className="text-right px-3 py-2 font-semibold text-zinc-500">Deduction</th>
                                                                 <th className="text-right px-3 py-2 font-semibold text-zinc-500">Net</th>
                                                                 <th className="text-left px-3 py-2 font-semibold text-zinc-500">Remarks</th>
-                                                                <th className="w-10"></th>
+                                                                <th className="w-22"></th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-zinc-100">
                                                             {member.sales.map(sale => (
                                                                 <tr key={sale.id} className="hover:bg-zinc-50">
-                                                                    <td className="px-3 py-2 text-zinc-600">{sale.sale_date}</td>
+                                                                    <td className="px-3 py-2 text-zinc-600">{sale.sale_date_formatted}</td>
+                                                                    <td className="px-3 py-2 text-zinc-600">
+                                                                        <Badge variant="secondary" className="text-[10px] h-5 px-2">
+                                                                            {sale.classification.replace('_', ' ')}
+                                                                        </Badge>
+                                                                    </td>
                                                                     <td className="px-3 py-2 text-right text-zinc-600">{fmtKg(sale.kilos)}</td>
                                                                     <td className="px-3 py-2 text-right text-zinc-600">₱{sale.price_per_kilo.toFixed(2)}</td>
                                                                     <td className="px-3 py-2 text-right font-medium text-zinc-900">{fmt(sale.gross_amount)}</td>
@@ -244,10 +408,16 @@ export default function CoproSales({ members, year, years, stats }: Props) {
                                                                     </td>
                                                                     <td className="px-3 py-2 text-right font-semibold text-[#2d5a27]">{fmt(sale.net_amount)}</td>
                                                                     <td className="px-3 py-2 text-zinc-500 max-w-40 truncate">{sale.remarks || '—'}</td>
-                                                                    <td className="px-3 py-2 text-right">
+                                                                    <td className="px-3 py-2 text-right flex items-center justify-end gap-2">
+                                                                        <button
+                                                                            onClick={() => openEditDialog(member, sale)}
+                                                                            className="text-zinc-300 hover:text-zinc-900 p-1"
+                                                                        >
+                                                                            <Pencil className="w-3.5 h-3.5" />
+                                                                        </button>
                                                                         <button
                                                                             onClick={() => deleteSale(sale.id)}
-                                                                            className="text-zinc-300 hover:text-red-500 p-0.5"
+                                                                            className="text-zinc-300 hover:text-red-500 p-1"
                                                                         >
                                                                             <Trash2 className="w-3.5 h-3.5" />
                                                                         </button>
@@ -287,7 +457,7 @@ export default function CoproSales({ members, year, years, stats }: Props) {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <Leaf className="w-4 h-4 text-[#2d5a27]" />
-                            Record Copra Sale
+                            {editingSale ? 'Edit Copra Sale' : 'Record Copra Sale'}
                         </DialogTitle>
                         {dialogMember && (
                             <p className="text-sm text-zinc-500 mt-0.5">{dialogMember.name}</p>
@@ -333,6 +503,18 @@ export default function CoproSales({ members, year, years, stats }: Props) {
                                 />
                                 {errors.price_per_kilo && <p className="text-xs text-red-500 mt-1">{errors.price_per_kilo}</p>}
                             </div>
+                        </div>
+
+                        <div>
+                            <label className="text-xs font-medium text-zinc-600 mb-1 block">Classification</label>
+                            <select
+                                value={data.classification}
+                                onChange={e => setData('classification', e.target.value)}
+                                className="w-full h-10 rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-700"
+                            >
+                                <option value="NON-MIGS">NON-MIGS</option>
+                                <option value="MIGS">MIGS</option>
+                            </select>
                         </div>
 
                         {/* Auto-calculated Gross */}
@@ -401,7 +583,7 @@ export default function CoproSales({ members, year, years, stats }: Props) {
                                 disabled={processing}
                                 className="bg-[#2d5a27] hover:bg-[#2d5a27]/90 text-white text-sm"
                             >
-                                {processing ? 'Saving...' : 'Record Sale'}
+                                {processing ? 'Saving...' : editingSale ? 'Save changes' : 'Record Sale'}
                             </Button>
                         </DialogFooter>
                     </form>

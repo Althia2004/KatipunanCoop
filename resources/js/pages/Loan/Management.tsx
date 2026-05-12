@@ -1,4 +1,4 @@
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+﻿import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     Banknote, Search, CheckCircle2, Clock, Users, XCircle,
@@ -30,7 +30,7 @@ const statusLabel = (s: LoanRequest['status']) =>
     s === 'for_bod_approval' ? 'For BOD' : s.charAt(0).toUpperCase() + s.slice(1);
 
 const fmt = (v: string | number) =>
-    '₱' + Number(v).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+    'â‚±' + Number(v).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
 export default function Management({ loanRequestsFromDb, members }: LoanManagementProps) {
     const { auth } = usePage().props as any;
@@ -56,7 +56,7 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
 
     // Create
     const [createOpen, setCreateOpen] = useState(false);
-    const createForm = useForm({ member_id: '', amount: '', purpose: '', term_months: '12', interest_rate: '3' });
+    const createForm = useForm({ member_id: '', amount: '', loan_type: '', purpose: '', term_months: '12', interest_rate: '3' });
 
     // Detail
     const [detailLoan, setDetailLoan] = useState<LoanRequest | null>(null);
@@ -161,6 +161,7 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                                 <tr>
                                     <th className="px-5 py-3">Requested By</th>
                                     <th className="px-5 py-3">Amount</th>
+                                    <th className="px-5 py-3">Type</th>
                                     <th className="px-5 py-3">Purpose</th>
                                     <th className="px-5 py-3">Term</th>
                                     <th className="px-5 py-3">Rate</th>
@@ -189,7 +190,14 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                                                 <span className="text-[10px] text-[#c8920a] font-semibold">BOD required</span>
                                             )}
                                         </td>
-                                        <td className="px-5 py-3 text-zinc-500 max-w-[160px] truncate">{lr.purpose || '—'}</td>
+                                        <td className="px-5 py-3">
+                                            {lr.loan_type ? (
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 text-zinc-600 capitalize">
+                                                    {lr.loan_type}
+                                                </span>
+                                            ) : <span className="text-zinc-300">â€”</span>}
+                                        </td>
+                                        <td className="px-5 py-3 text-zinc-500 max-w-40 truncate">{lr.purpose || 'â€”'}</td>
                                         <td className="px-5 py-3 text-zinc-500">{lr.term_months}mo</td>
                                         <td className="px-5 py-3 text-zinc-500">{lr.interest_rate}%</td>
                                         <td className="px-5 py-3">
@@ -247,7 +255,7 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                 </div>
             </div>
 
-            {/* ── Detail Modal ─────────────────────────────────────────────────── */}
+            {/* â”€â”€ Detail Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             {detailLoan && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
                     onClick={e => e.target === e.currentTarget && setDetailLoan(null)}>
@@ -257,7 +265,7 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                                 <p className="text-xs text-zinc-400 uppercase tracking-widest">Loan Request #{detailLoan.id}</p>
                                 <h2 className="text-xl font-bold text-zinc-900 mt-1">{detailLoan.requested_by.name}</h2>
                             </div>
-                            <button onClick={() => setDetailLoan(null)} className="text-zinc-400 hover:text-zinc-600 text-xl leading-none">✕</button>
+                            <button onClick={() => setDetailLoan(null)} className="text-zinc-400 hover:text-zinc-600 text-xl leading-none">âœ•</button>
                         </div>
                         <div className="p-6 space-y-4 text-sm">
                             <div className="grid grid-cols-2 gap-3">
@@ -275,7 +283,7 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                             </div>
                             <div className="bg-zinc-50 rounded-xl p-3">
                                 <p className="text-xs text-zinc-400">Purpose</p>
-                                <p className="text-zinc-700">{detailLoan.purpose || '—'}</p>
+                                <p className="text-zinc-700">{detailLoan.purpose || 'â€”'}</p>
                             </div>
                             <div className="flex items-center gap-2">
                                 <p className="text-xs text-zinc-400">Status:</p>
@@ -321,7 +329,7 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                 </div>
             )}
 
-            {/* ── Approve Dialog ─────────────────────────────────────────────── */}
+            {/* â”€â”€ Approve Dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader><DialogTitle className="text-[#2d5a27]">Approve Loan Request</DialogTitle></DialogHeader>
@@ -332,7 +340,7 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                                 { l: 'Amount',   v: fmt(approveLoan.amount) },
                                 { l: 'Term',     v: `${approveLoan.term_months} months` },
                                 { l: 'Rate',     v: `${approveLoan.interest_rate}%/month` },
-                                { l: 'Purpose',  v: approveLoan.purpose || '—' },
+                                { l: 'Purpose',  v: approveLoan.purpose || 'â€”' },
                             ].map(({ l, v }) => (
                                 <div key={l} className="bg-zinc-50 rounded-xl p-3 text-sm">
                                     <p className="text-xs text-zinc-400">{l}</p>
@@ -341,7 +349,7 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                             ))}
                         </div>
                         <div className="bg-[#2d5a27]/5 border border-[#2d5a27]/20 rounded-xl p-3 text-xs text-[#2d5a27]">
-                            ✓ A loan record and amortization schedule will be generated automatically.
+                            âœ“ A loan record and amortization schedule will be generated automatically.
                         </div>
                     </div>
                     <DialogFooter>
@@ -351,13 +359,13 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                 </DialogContent>
             </Dialog>
 
-            {/* ── Reject Dialog ──────────────────────────────────────────────── */}
+            {/* â”€â”€ Reject Dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader><DialogTitle className="text-red-600">Reject Loan Request</DialogTitle></DialogHeader>
                     <div className="space-y-3 py-2">
                         <p className="text-sm text-zinc-600">
-                            Rejecting loan for <strong>{rejectLoan?.requested_by.name}</strong> — {rejectLoan && fmt(rejectLoan.amount)}
+                            Rejecting loan for <strong>{rejectLoan?.requested_by.name}</strong> â€” {rejectLoan && fmt(rejectLoan.amount)}
                         </p>
                         <div className="space-y-1">
                             <Label className="text-xs">Rejection Reason <span className="text-red-500">*</span></Label>
@@ -377,7 +385,7 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                 </DialogContent>
             </Dialog>
 
-            {/* ── Escalate Dialog ────────────────────────────────────────────── */}
+            {/* â”€â”€ Escalate Dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <Dialog open={escalateOpen} onOpenChange={setEscalateOpen}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader><DialogTitle className="text-[#c8920a]">Escalate to BOD</DialogTitle></DialogHeader>
@@ -388,7 +396,7 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                         {escalateLoan && Number(escalateLoan.amount) > 50000 && (
                             <div className="bg-[#c8920a]/10 border border-[#c8920a]/20 rounded-xl p-3 text-xs text-[#c8920a] flex items-start gap-2">
                                 <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                                This loan exceeds ₱50,000 and requires BOD approval.
+                                This loan exceeds â‚±50,000 and requires BOD approval.
                             </div>
                         )}
                         <div className="space-y-1">
@@ -408,7 +416,7 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                 </DialogContent>
             </Dialog>
 
-            {/* ── Create Dialog ──────────────────────────────────────────────── */}
+            {/* â”€â”€ Create Dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader><DialogTitle className="text-[#2d5a27]">New Loan Request</DialogTitle></DialogHeader>
@@ -429,7 +437,7 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                             </div>
                         )}
                         <div className="space-y-1">
-                            <Label className="text-xs">Amount (₱) <span className="text-red-500">*</span></Label>
+                            <Label className="text-xs">Amount (â‚±) <span className="text-red-500">*</span></Label>
                             <Input type="number" min="1000" step="100"
                                 value={createForm.data.amount} onChange={e => createForm.setData('amount', e.target.value)}
                                 placeholder="e.g. 25000" />
@@ -439,6 +447,24 @@ export default function Management({ loanRequestsFromDb, members }: LoanManageme
                                 </p>
                             )}
                             {createForm.errors.amount && <p className="text-xs text-red-500">{createForm.errors.amount}</p>}
+                        </div>
+                        <div className="space-y-1">
+                            <Label className="text-xs">Loan Type <span className="text-red-500">*</span></Label>
+                            <select
+                                value={createForm.data.loan_type}
+                                onChange={e => createForm.setData('loan_type', e.target.value)}
+                                className="w-full border border-zinc-200 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-[#2d5a27]/30"
+                                required
+                            >
+                                <option value="">Select type...</option>
+                                <option value="regular">Regular Loan</option>
+                                <option value="emergency">Emergency Loan</option>
+                                <option value="educational">Educational Loan</option>
+                                <option value="livelihood">Livelihood Loan</option>
+                                <option value="housing">Housing Loan</option>
+                                <option value="agricultural">Agricultural Loan</option>
+                            </select>
+                            {createForm.errors.loan_type && <p className="text-xs text-red-500">{createForm.errors.loan_type}</p>}
                         </div>
                         <div className="space-y-1">
                             <Label className="text-xs">Purpose <span className="text-red-500">*</span></Label>

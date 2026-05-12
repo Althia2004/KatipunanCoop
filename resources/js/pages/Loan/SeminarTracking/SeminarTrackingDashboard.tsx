@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+﻿import { Head, Link } from '@inertiajs/react';
 import { useState } from 'react';
 import { Users, BookOpenCheck, Target, BarChart3, Plus, Search, Filter, CheckCircle2, Clock } from 'lucide-react';
 import SeminarTrackTable from '@/components/seminar-track-table';
@@ -32,7 +32,7 @@ export default function SeminarTracking({ seminarsFromDb }: SeminarPageProps) {
         <>
             <Head title="Seminar Tracking" />
 
-            <div className="p-8 max-w-[90rem] mx-auto space-y-8">
+            <div className="p-8 max-w-360 mx-auto space-y-8">
                 
                 {/* 1. Header & Quick Actions */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 pb-6">

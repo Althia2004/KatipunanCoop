@@ -91,6 +91,11 @@ export function AppSidebar() {
             icon: UserCircle,
         },
         {
+            title: 'Archive Management',
+            href: '/user/archive-management',
+            icon: Archive,
+        },
+        {
             title: 'Amortization Schedules',
             href: '/user/amortization',
             icon: BookOpen,

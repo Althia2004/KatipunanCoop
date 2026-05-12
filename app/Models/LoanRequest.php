@@ -18,6 +18,7 @@ class LoanRequest extends Model
 
     protected $fillable = [
         'amount',
+        'loan_type',
         'requested_by',
         'requested_at',
         'interest_rate',
@@ -31,13 +32,21 @@ class LoanRequest extends Model
     ];
 
     protected $casts = [
-        'amount' => 'decimal:2',
-        'requested_at' => 'date',
+        'amount'        => 'decimal:2',
+        'interest_rate' => 'decimal:2',
+        'requested_at'  => 'date',
+        'reviewed_at'   => 'datetime',
     ];
 
+    public function requester(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\User::class, 'requested_by');
+    }
+
+    // Alias kept for backwards compatibility
     public function requestedBy(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'requested_by');
+        return $this->requester();
     }
 
     public function reviewer(): BelongsTo

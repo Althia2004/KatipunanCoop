@@ -22,6 +22,7 @@ class SeminarController extends Controller
                 'attended'       => in_array($r->status, [
                     MemberRegistration::STATUS_SEMINAR_ATTENDED,
                     MemberRegistration::STATUS_APPROVED,
+                    'for_bod_approval',
                 ]),
             ]);
 

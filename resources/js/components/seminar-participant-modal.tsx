@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+﻿import { router } from '@inertiajs/react';
 import { Participant, Seminar } from '@/types/seminar';
 import { X, Users, CheckCircle, XCircle, Phone } from 'lucide-react';
 
@@ -80,7 +80,7 @@ export default function SeminarParticipantModal({ isOpen, onClose, seminar }: Mo
                             >
                                 {/* Avatar + Info */}
                                 <div className="flex items-center gap-3 min-w-0">
-                                    <div className="w-10 h-10 bg-[#4c9f5f]/10 rounded-full flex items-center justify-center text-[#2d4734] font-bold flex-shrink-0">
+                                    <div className="w-10 h-10 bg-[#4c9f5f]/10 rounded-full flex items-center justify-center text-[#2d4734] font-bold shrink-0">
                                         {person.name.charAt(0)}
                                     </div>
                                     <div className="min-w-0">
@@ -93,7 +93,7 @@ export default function SeminarParticipantModal({ isOpen, onClose, seminar }: Mo
                                 </div>
 
                                 {/* Right: status badge + attendance action */}
-                                <div className="flex items-center gap-3 flex-shrink-0">
+                                <div className="flex items-center gap-3 shrink-0">
                                     <span className={`hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${STATUS_COLORS[person.status] ?? 'bg-zinc-100 text-zinc-600'}`}>
                                         {STATUS_LABELS[person.status] ?? person.status}
                                     </span>
@@ -102,7 +102,7 @@ export default function SeminarParticipantModal({ isOpen, onClose, seminar }: Mo
                                         <span className="flex items-center gap-1 text-emerald-600 text-xs font-bold uppercase">
                                             <CheckCircle className="w-4 h-4" /> Present
                                         </span>
-                                    ) : (
+                                    ) : person.status === 'seminar_scheduled' ? (
                                         <button
                                             onClick={() => handleConfirmAttendance(person)}
                                             className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition active:scale-95"
@@ -110,6 +110,8 @@ export default function SeminarParticipantModal({ isOpen, onClose, seminar }: Mo
                                         >
                                             <XCircle className="w-3.5 h-3.5" /> Mark Attended
                                         </button>
+                                    ) : (
+                                        <span className="text-zinc-400 text-xs">â€”</span>
                                     )}
                                 </div>
                             </div>

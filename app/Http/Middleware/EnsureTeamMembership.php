@@ -18,6 +18,14 @@ class EnsureTeamMembership
      */
     public function handle(Request $request, Closure $next, ?string $minimumRole = null): Response
     {
+        $teamSlug = $request->route('current_team');
+
+        // Safety net: reserved prefixes must never be treated as team slugs
+        $reserved = ['user','member','superadmin','admin','api','login','logout','register','loan','reports','settings','invitations','dashboard'];
+        if (is_string($teamSlug) && in_array($teamSlug, $reserved, true)) {
+            abort(404);
+        }
+
         [$user, $team] = [$request->user(), $this->team($request)];
 
         abort_if(! $user || ! $team || ! $user->belongsToTeam($team), 403);

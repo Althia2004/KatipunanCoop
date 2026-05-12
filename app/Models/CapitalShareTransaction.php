@@ -21,6 +21,13 @@ class CapitalShareTransaction extends Model
         'balance_after' => 'float',
     ];
 
+    protected static function booted(): void
+    {
+        static::created(function (self $transaction) {
+            $transaction->member?->refresh()->checkAndUpgradeToRegular();
+        });
+    }
+
     public function member(): BelongsTo
     {
         return $this->belongsTo(Member::class);

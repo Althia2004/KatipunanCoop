@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, router } from '@inertiajs/react';
 import { CalendarDays, Download, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,8 +24,22 @@ interface Meeting {
     is_pinned: boolean;
 }
 
+interface PaginationLink {
+    url: string | null;
+    label: string;
+    active: boolean;
+}
+
+interface PaginatedMeetings {
+    data: Meeting[];
+    current_page: number;
+    last_page: number;
+    total: number;
+    links: PaginationLink[];
+}
+
 interface Props {
-    meetings: Meeting[];
+    meetings: PaginatedMeetings;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -62,6 +76,7 @@ export default function AnnualReports({ meetings }: Props) {
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         form.post('/superadmin/reports/annual', {
+            preserveScroll: true,
             onSuccess: () => {
                 setDialogOpen(false);
                 form.reset();
@@ -93,6 +108,11 @@ export default function AnnualReports({ meetings }: Props) {
                     </Button>
                 </div>
 
+                {/* Total count */}
+                <p className="text-sm text-zinc-500">
+                    {meetings.total} meeting{meetings.total !== 1 ? 's' : ''} recorded
+                </p>
+
                 {flashMsg && (
                     <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
                         {flashMsg}
@@ -109,6 +129,7 @@ export default function AnnualReports({ meetings }: Props) {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-zinc-100 bg-zinc-50">
+                                        <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">#</th>
                                         <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Topic</th>
                                         <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Host</th>
                                         <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Date</th>
@@ -118,15 +139,18 @@ export default function AnnualReports({ meetings }: Props) {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-zinc-100">
-                                    {meetings.length === 0 && (
+                                    {meetings.data.length === 0 && (
                                         <tr>
-                                            <td colSpan={6} className="text-center py-10 text-zinc-400 text-sm">
+                                            <td colSpan={7} className="text-center py-10 text-zinc-400 text-sm">
                                                 No annual meeting reports yet.
                                             </td>
                                         </tr>
                                     )}
-                                    {meetings.map((m) => (
+                                    {meetings.data.map((m, idx) => (
                                         <tr key={m.id} className="hover:bg-zinc-50 transition">
+                                            <td className="px-4 py-3 text-zinc-400 text-xs">
+                                                {(meetings.current_page - 1) * 10 + idx + 1}
+                                            </td>
                                             <td className="px-4 py-3 font-medium text-zinc-800 max-w-48 truncate">{m.topic}</td>
                                             <td className="px-4 py-3 text-zinc-500">{m.host}</td>
                                             <td className="px-4 py-3 text-zinc-500">{formatDate(m.date)}</td>
@@ -151,6 +175,25 @@ export default function AnnualReports({ meetings }: Props) {
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* Pagination */}
+                        {meetings.last_page > 1 && (
+                            <div className="flex gap-1 justify-center py-4 border-t border-zinc-100">
+                                {meetings.links.map((link, i) => (
+                                    <button
+                                        key={i}
+                                        disabled={!link.url}
+                                        onClick={() => link.url && router.get(link.url, {}, { preserveState: true })}
+                                        className={`px-3 py-1.5 rounded-xl text-sm border transition ${
+                                            link.active
+                                                ? 'bg-[#2d5a27] text-white border-[#2d5a27]'
+                                                : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
+                                        } disabled:opacity-40`}
+                                        dangerouslySetInnerHTML={{ __html: link.label }}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -228,7 +271,9 @@ export default function AnnualReports({ meetings }: Props) {
                                 <InputError message={form.errors.time_start} />
                             </div>
                             <div className="grid gap-1.5">
-                                <Label htmlFor="time_end">End Time <span className="text-zinc-400">(optional)</span></Label>
+                                <Label htmlFor="time_end">
+                                    End Time <span className="text-zinc-400">(optional)</span>
+                                </Label>
                                 <Input
                                     id="time_end"
                                     type="time"
@@ -240,7 +285,9 @@ export default function AnnualReports({ meetings }: Props) {
                         </div>
 
                         <div className="grid gap-1.5">
-                            <Label htmlFor="overview">Overview / Notes <span className="text-zinc-400">(optional)</span></Label>
+                            <Label htmlFor="overview">
+                                Overview / Notes <span className="text-zinc-400">(optional)</span>
+                            </Label>
                             <textarea
                                 id="overview"
                                 rows={3}
@@ -274,4 +321,3 @@ export default function AnnualReports({ meetings }: Props) {
         </>
     );
 }
-

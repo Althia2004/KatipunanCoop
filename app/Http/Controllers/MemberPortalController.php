@@ -92,6 +92,15 @@ class MemberPortalController extends Controller
             'next_due'        => $nextDue,
             'recent_payments' => $recentPayments,
             'user'            => ['name' => $user->name, 'email' => $user->email],
+            'capitalShareProgress' => [
+                'share_capital'                   => (float) ($member->share_capital ?? 0),
+                'capital_share_target'             => (float) ($member->capital_share_target ?? 10000),
+                'capital_share_remaining'          => (float) $member->capital_share_remaining,
+                'capital_share_progress'           => (float) $member->capital_share_progress,
+                'capital_share_subscription_date'  => $member->capital_share_subscription_date?->format('M d, Y'),
+                'capital_share_payment_frequency'  => $member->capital_share_payment_frequency,
+                'is_regular'                       => $member->status === \App\Models\Member::STATUS_REGULAR,
+            ],
         ]);
     }
 
@@ -113,29 +122,181 @@ class MemberPortalController extends Controller
             ->map(fn($loan) => [
                 'id'                => $loan->id,
                 'principal_amount'  => (float) $loan->principal_amount,
-                'term_months'       => $loan->term_months,
-                'interest_rate'     => (float) $loan->interest_rate,
+                'term_months'       => (int) ($loan->term_months ?? 12),
+                'interest_rate'     => (float) ($loan->interest_rate ?? 0),
                 'total_payable'     => (float) ($loan->total_payable ?? $loan->principal_amount),
-                'remaining_balance' => (float) $loan->remaining_balance,
+                'remaining_balance' => (float) ($loan->remaining_balance ?? $loan->principal_amount),
                 'status'            => $loan->status,
                 'created_at'        => $loan->created_at->format('M d, Y'),
                 'amortizations'     => $loan->amortizations->map(fn($a) => [
                     'id'            => $a->id,
                     'due_date'      => \Carbon\Carbon::parse($a->due_date)->format('M d, Y'),
-                    'amount_to_pay' => (float) ($a->amount_to_pay ?? $a->amount_due ?? 0),
-                    'principal_part'=> (float) ($a->principal_part ?? $a->principal_portion ?? 0),
-                    'interest_part' => (float) ($a->interest_part ?? $a->interest_portion ?? 0),
-                    'status'        => $a->status,
+                    'amount_to_pay' => (float) ($a->amount_to_pay ?? 0),
+                    'principal_part'=> (float) ($a->principal_part ?? 0),
+                    'interest_part' => (float) ($a->interest_part ?? 0),
+                    'status'        => $a->status ?? 'pending',
                     'total_paid'    => (float) $a->payments->sum('amount_paid'),
                 ])->values(),
             ]);
 
         return inertia('member/Loans', [
-            'loans'       => $loans,
-            'eligibility' => $eligibility,
-            'member'      => ['name' => $member->name],
-            'user'        => ['name' => $user->name],
+            'loans'  => $loans,
+            'member' => ['name' => $member->name],
+            'user'   => ['name' => $user->name, 'email' => $user->email],
+            'capitalShare' => [
+                'paid'       => (float) ($member->share_capital ?? 0),
+                'target'     => (float) ($member->capital_share_target ?? 10000),
+                'percent'    => $member->capital_share_progress,
+                'remaining'  => $member->capital_share_remaining,
+                'frequency'  => $member->capital_share_payment_frequency,
+                'is_regular' => $member->status === \App\Models\Member::STATUS_REGULAR,
+                'status'     => $member->status,
+            ],
         ]);
+    }
+
+    public function payments()
+    {
+        $user   = auth()->user();
+        $member = $this->getMember();
+
+        // Loan payments
+        $loanPayments = \App\Models\LoanPayment::whereIn(
+            'loan_id',
+            Loan::where('member_id', $user->id)->pluck('id')
+        )
+        ->with(['loan', 'recordedBy'])
+        ->latest('payment_date')
+        ->get()
+        ->map(fn ($p) => [
+            'id'               => $p->id,
+            'loan_id'          => $p->loan_id,
+            'amount_paid'      => (float) $p->amount_paid,
+            'payment_date'     => \Carbon\Carbon::parse($p->payment_date)->format('M d, Y'),
+            'payment_method'   => $p->payment_method ?? 'cash',
+            'payment_type'     => $p->payment_type ?? 'onsite',
+            'reference_number' => $p->reference_number ?? null,
+            'remarks'          => $p->remarks ?? null,
+            'recorded_by'      => $p->recordedBy?->name ?? 'Staff',
+            'category'         => 'loan',
+        ]);
+
+        // Capital share contributions
+        $capitalPayments = collect();
+        try {
+            $capitalPayments = \App\Models\CapitalShareTransaction::where('member_id', $member->id)
+                ->where('type', 'credit')
+                ->latest()
+                ->get()
+                ->map(fn ($t) => [
+                    'id'               => $t->id,
+                    'loan_id'          => null,
+                    'amount_paid'      => (float) $t->amount,
+                    'payment_date'     => $t->created_at->format('M d, Y'),
+                    'payment_method'   => 'cash',
+                    'payment_type'     => 'onsite',
+                    'reference_number' => null,
+                    'remarks'          => $t->remarks ?? null,
+                    'recorded_by'      => 'Staff',
+                    'category'         => 'capital_share',
+                ]);
+        } catch (\Exception $e) {}
+
+        $allPayments = collect([...$loanPayments, ...$capitalPayments])
+            ->sortByDesc('payment_date')
+            ->values();
+
+        // Active loans for Make Payment dialog
+        $activeLoans = Loan::where('member_id', $user->id)
+            ->where('status', 'active')
+            ->where('remaining_balance', '>', 0)
+            ->get()
+            ->map(fn ($l) => [
+                'id'                => $l->id,
+                'loan_type'         => 'Loan #' . $l->id,
+                'remaining_balance' => (float) ($l->remaining_balance ?? 0),
+                'principal_amount'  => (float) ($l->principal_amount ?? 0),
+            ]);
+
+        return inertia('member/Payments', [
+            'member'   => [
+                'name'            => $member->name,
+                'savings_balance' => (float) ($member->savings_balance ?? 0),
+                'share_capital'   => (float) ($member->share_capital ?? 0),
+            ],
+            'payments' => $allPayments,
+            'loans'    => $activeLoans,
+            'stats'    => [
+                'total_loan_paid'    => $loanPayments->sum('amount_paid'),
+                'total_capital_paid' => $capitalPayments->sum('amount_paid'),
+                'total_payments'     => $allPayments->count(),
+                'last_payment'       => $allPayments->first()['payment_date'] ?? null,
+            ],
+            'user' => ['name' => $user->name, 'email' => $user->email],
+        ]);
+    }
+
+    public function storePayment(Request $request)
+    {
+        $validated = $request->validate([
+            'loan_id'          => 'required|integer|exists:loans,id',
+            'amount'           => 'required|numeric|min:1',
+            'payment_method'   => 'required|in:cash,gcash,maya,bpi,credit_card,debit_card',
+            'payment_type'     => 'nullable|in:onsite,online',
+            'reference_number' => 'nullable|string|max:100',
+            'remarks'          => 'nullable|string|max:500',
+        ]);
+
+        $loan = Loan::where('id', $validated['loan_id'])
+            ->where('member_id', auth()->id())
+            ->where('status', 'active')
+            ->firstOrFail();
+
+        if ((float) $validated['amount'] > (float) ($loan->remaining_balance ?? 0)) {
+            return back()->withErrors(['amount' => 'Payment exceeds the remaining loan balance.']);
+        }
+
+        \App\Models\LoanPayment::create([
+            'loan_id'          => $loan->id,
+            'amount_paid'      => $validated['amount'],
+            'payment_date'     => now()->toDateString(),
+            'payment_method'   => $validated['payment_method'],
+            'payment_type'     => $validated['payment_type'] ?? 'onsite',
+            'reference_number' => $validated['reference_number'] ?? null,
+            'remarks'          => $validated['remarks'] ?? null,
+            'recorded_by'      => auth()->id(),
+        ]);
+
+        $newBalance = max(0, ((float) $loan->remaining_balance) - ((float) $validated['amount']));
+        $loan->update([
+            'remaining_balance' => $newBalance,
+            'status'            => $newBalance <= 0 ? 'fully_paid' : $loan->status,
+        ]);
+
+        // Mark the next pending/overdue amortization as paid
+        $nextAmortization = \App\Models\LoanAmortization::where('loan_id', $loan->id)
+            ->whereIn('status', ['pending', 'overdue'])
+            ->orderBy('due_date')
+            ->first();
+
+        if ($nextAmortization) {
+            $nextAmortization->update([
+                'status'  => 'paid',
+                'paid_at' => now(),
+            ]);
+        }
+
+        // Recalculate MIGS — good loan standing points depend on amortization status
+        $member = $this->getMember();
+        if ($member) {
+            app(\App\Services\MigsScoreService::class)->recalculate($member);
+        }
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($loan)
+            ->log("Member loan payment: ₱{$validated['amount']} on loan #{$loan->id}");
+
+        return back()->with('success', 'Payment submitted successfully.');
     }
 
     public function savings()
@@ -189,128 +350,67 @@ class MemberPortalController extends Controller
         ]);
     }
 
-    public function payments()
-    {
-        $user   = auth()->user();
-        $member = $this->getMember();
-
-        // Loan payments
-        $loanPayments = \App\Models\LoanPayment::whereIn(
-            'loan_id',
-            Loan::where('member_id', $user->id)->pluck('id')
-        )
-        ->with(['loan', 'recordedBy'])
-        ->latest('payment_date')
-        ->get()
-        ->map(fn($p) => [
-            'id'               => $p->id,
-            'loan_id'          => $p->loan_id,
-            'amount_paid'      => (float) $p->amount_paid,
-            'payment_date'     => \Carbon\Carbon::parse($p->payment_date)->format('M d, Y'),
-            'payment_method'   => $p->payment_method ?? 'cash',
-            'payment_type'     => $p->payment_type ?? 'onsite',
-            'reference_number' => $p->reference_number ?? null,
-            'remarks'          => $p->remarks ?? null,
-            'recorded_by'      => $p->recordedBy?->name ?? 'Staff',
-            'category'         => 'loan',
-        ]);
-
-        // Capital share contributions
-        $capitalPayments = collect();
-        try {
-            $capitalPayments = \App\Models\CapitalShareTransaction::where('member_id', $member->id)
-                ->where('type', 'contribution')
-                ->latest('transaction_date')
-                ->get()
-                ->map(fn($t) => [
-                    'id'               => $t->id,
-                    'loan_id'          => null,
-                    'amount_paid'      => (float) $t->amount,
-                    'payment_date'     => \Carbon\Carbon::parse($t->transaction_date)->format('M d, Y'),
-                    'payment_method'   => 'cash',
-                    'payment_type'     => 'onsite',
-                    'reference_number' => $t->reference ?? null,
-                    'remarks'          => $t->notes ?? null,
-                    'recorded_by'      => 'Staff',
-                    'category'         => 'capital_share',
-                ]);
-        } catch (\Exception $e) {
-            // Table may not exist yet
-        }
-
-        $allPayments = collect([...$loanPayments, ...$capitalPayments])
-            ->sortByDesc('payment_date')
-            ->values();
-
-        // Active loans for Make Payment dialog
-        $activeLoans = Loan::where('member_id', $user->id)
-            ->where('status', 'active')
-            ->where('remaining_balance', '>', 0)
-            ->get()
-            ->map(fn ($l) => [
-                'id'                => $l->id,
-                'loan_type'         => 'Loan #' . $l->id,
-                'remaining_balance' => (float) ($l->remaining_balance ?? 0),
-                'principal_amount'  => (float) ($l->principal_amount ?? 0),
-            ]);
-
-        return inertia('member/Payments', [
-            'member'   => [
-                'name'            => $member->name,
-                'savings_balance' => (float) ($member->savings_balance ?? 0),
-                'share_capital'   => (float) ($member->share_capital ?? 0),
-            ],
-            'payments' => $allPayments,
-            'loans'    => $activeLoans,
-            'stats'    => [
-                'total_loan_paid'    => $loanPayments->sum('amount_paid'),
-                'total_capital_paid' => $capitalPayments->sum('amount_paid'),
-                'total_payments'     => $allPayments->count(),
-                'last_payment'       => $allPayments->first()['payment_date'] ?? null,
-            ],
-            'user' => ['name' => $user->name, 'email' => $user->email],
-        ]);
-    }
-
-    public function storePayment(Request $request)
+    public function savingsDeposit(Request $request)
     {
         $validated = $request->validate([
-            'loan_id'          => 'required|integer|exists:loans,id',
-            'amount'           => 'required|numeric|min:1',
-            'payment_method'   => 'required|in:cash,gcash,maya,bpi,credit_card,debit_card',
-            'payment_type'     => 'nullable|in:onsite,online',
-            'reference_number' => 'nullable|string|max:100',
-            'remarks'          => 'nullable|string|max:500',
+            'amount'  => 'required|numeric|min:0.01',
+            'remarks' => 'nullable|string|max:500',
         ]);
 
-        // Ensure the loan belongs to the authenticated member
-        $loan = Loan::where('id', $validated['loan_id'])
-            ->where('member_id', auth()->id())
-            ->where('status', 'active')
-            ->firstOrFail();
+        $member = $this->getMember();
+        $newBalance = (float) ($member->savings_balance ?? 0) + (float) $validated['amount'];
 
-        if ((float) $validated['amount'] > (float) ($loan->remaining_balance ?? 0)) {
-            return back()->withErrors(['amount' => 'Payment exceeds the remaining loan balance.']);
-        }
-
-        \App\Models\LoanPayment::create([
-            'loan_id'          => $loan->id,
-            'amount_paid'      => $validated['amount'],
-            'payment_date'     => now()->toDateString(),
-            'payment_method'   => $validated['payment_method'],
-            'payment_type'     => $validated['payment_type'] ?? 'onsite',
-            'reference_number' => $validated['reference_number'] ?? null,
-            'remarks'          => $validated['remarks'] ?? null,
-            'recorded_by'      => auth()->id(),
+        \App\Models\SavingsTransaction::create([
+            'member_id'     => $member->id,
+            'type'          => 'deposit',
+            'amount'        => $validated['amount'],
+            'balance_after' => $newBalance,
+            'remarks'       => $validated['remarks'] ?? null,
+            'recorded_by'   => auth()->id(),
         ]);
 
-        $loan->decrement('remaining_balance', $validated['amount']);
+        $member->update(['savings_balance' => $newBalance]);
+        app(\App\Services\MigsScoreService::class)->recalculate($member);
 
         activity()->causedBy(auth()->user())
-            ->performedOn($loan)
-            ->log("Member loan payment: ₱{$validated['amount']} on loan #{$loan->id}");
+            ->performedOn($member)
+            ->log("Member savings deposit: ₱{$validated['amount']}. New balance: ₱{$newBalance}");
 
-        return back()->with('success', 'Payment submitted successfully.');
+        return back()->with('success', 'Savings deposit recorded successfully.');
+    }
+
+    public function savingsWithdraw(Request $request)
+    {
+        $validated = $request->validate([
+            'amount'  => 'required|numeric|min:0.01',
+            'remarks' => 'nullable|string|max:500',
+        ]);
+
+        $member = $this->getMember();
+        $currentBalance = (float) ($member->savings_balance ?? 0);
+        if ((float) $validated['amount'] > $currentBalance) {
+            return back()->withErrors(['amount' => 'Withdrawal amount exceeds your savings balance.']);
+        }
+
+        $newBalance = $currentBalance - (float) $validated['amount'];
+
+        \App\Models\SavingsTransaction::create([
+            'member_id'     => $member->id,
+            'type'          => 'withdrawal',
+            'amount'        => $validated['amount'],
+            'balance_after' => $newBalance,
+            'remarks'       => $validated['remarks'] ?? null,
+            'recorded_by'   => auth()->id(),
+        ]);
+
+        $member->update(['savings_balance' => $newBalance]);
+        app(\App\Services\MigsScoreService::class)->recalculate($member);
+
+        activity()->causedBy(auth()->user())
+            ->performedOn($member)
+            ->log("Member savings withdrawal: ₱{$validated['amount']}. New balance: ₱{$newBalance}");
+
+        return back()->with('success', 'Savings withdrawal recorded successfully.');
     }
 
     public function profile()
@@ -453,71 +553,5 @@ class MemberPortalController extends Controller
         }
 
         return back()->with('success', 'Contact number updated.');
-    }
-
-    public function savingsDeposit(Request $request)
-    {
-        $validated = $request->validate([
-            'amount'  => 'required|numeric|min:0.01',
-            'remarks' => 'nullable|string|max:500',
-        ]);
-
-        $member     = $this->getMember();
-        $newBalance = (float) ($member->savings_balance ?? 0) + (float) $validated['amount'];
-
-        \App\Models\SavingsTransaction::create([
-            'member_id'     => $member->id,
-            'type'          => 'deposit',
-            'amount'        => $validated['amount'],
-            'balance_after' => $newBalance,
-            'remarks'       => $validated['remarks'] ?? null,
-            'recorded_by'   => auth()->id(),
-        ]);
-
-        $member->update(['savings_balance' => $newBalance]);
-
-        app(\App\Services\MigsScoreService::class)->recalculate($member);
-
-        activity()->causedBy(auth()->user())
-            ->performedOn($member)
-            ->log("Member savings deposit: ₱{$validated['amount']}. New balance: ₱{$newBalance}");
-
-        return back()->with('success', 'Savings deposit recorded successfully.');
-    }
-
-    public function savingsWithdraw(Request $request)
-    {
-        $validated = $request->validate([
-            'amount'  => 'required|numeric|min:0.01',
-            'remarks' => 'nullable|string|max:500',
-        ]);
-
-        $member         = $this->getMember();
-        $currentBalance = (float) ($member->savings_balance ?? 0);
-
-        if ((float) $validated['amount'] > $currentBalance) {
-            return back()->withErrors(['amount' => 'Withdrawal amount exceeds your savings balance.']);
-        }
-
-        $newBalance = $currentBalance - (float) $validated['amount'];
-
-        \App\Models\SavingsTransaction::create([
-            'member_id'     => $member->id,
-            'type'          => 'withdrawal',
-            'amount'        => $validated['amount'],
-            'balance_after' => $newBalance,
-            'remarks'       => $validated['remarks'] ?? null,
-            'recorded_by'   => auth()->id(),
-        ]);
-
-        $member->update(['savings_balance' => $newBalance]);
-
-        app(\App\Services\MigsScoreService::class)->recalculate($member);
-
-        activity()->causedBy(auth()->user())
-            ->performedOn($member)
-            ->log("Member savings withdrawal: ₱{$validated['amount']}. New balance: ₱{$newBalance}");
-
-        return back()->with('success', 'Savings withdrawal recorded successfully.');
     }
 }

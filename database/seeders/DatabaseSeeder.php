@@ -19,7 +19,6 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             MemberSeeder::class,
             LoanSeeder::class,
-            LoanRequestSeeder::class,
         ]);
 
         // User::factory(10)->create();

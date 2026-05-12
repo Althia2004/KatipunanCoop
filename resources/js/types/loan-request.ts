@@ -1,6 +1,7 @@
 export interface LoanRequest {
     id: number;
     amount: string;
+    loan_type: string | null;
     purpose: string | null;
     status: 'pending' | 'for_bod_approval' | 'approved' | 'rejected';
     requested_at: string;

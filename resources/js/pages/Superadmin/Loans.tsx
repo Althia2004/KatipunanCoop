@@ -14,6 +14,7 @@ interface LoanItem {
     member_id: number;
     amount: number;
     purpose: string;
+    loan_type: string | null;
     status: 'active' | 'fully_paid' | 'defaulted';
     interest_rate: number;
     term_months: number;
@@ -83,7 +84,7 @@ type LoanStatus = LoanItem['status'];
 const STATUS_LABEL: Record<LoanStatus, string> = {
     active:     'Active',
     fully_paid: 'Fully Paid',
-    defaulted:  'Defaulted',
+    defaulted:  'Arrears',
 };
 
 const STATUS_BADGE: Record<LoanStatus, string> = {
@@ -278,6 +279,7 @@ export default function Loans({ loans, stats, filters }: Props) {
                                     <tr className="border-b border-zinc-100 bg-zinc-50">
                                         <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Member</th>
                                         <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Amount</th>
+                                        <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Type</th>
                                         <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Purpose</th>
                                         <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Status</th>
                                         <th className="text-left px-4 py-2.5 text-xs font-medium text-zinc-500 uppercase tracking-wide">Term</th>
@@ -289,13 +291,20 @@ export default function Loans({ loans, stats, filters }: Props) {
                                 <tbody className="divide-y divide-zinc-100">
                                     {loans.data.length === 0 && (
                                         <tr>
-                                            <td colSpan={8} className="text-center py-12 text-zinc-400 text-sm">No loans found.</td>
+                                            <td colSpan={9} className="text-center py-12 text-zinc-400 text-sm">No loans found.</td>
                                         </tr>
                                     )}
                                     {loans.data.map((l) => (
                                         <tr key={l.id} className="hover:bg-zinc-50 transition">
                                             <td className="px-4 py-3 font-medium text-zinc-800">{l.member_name}</td>
                                             <td className="px-4 py-3 text-zinc-700">{fmt(l.amount)}</td>
+                                            <td className="px-4 py-3">
+                                                {l.loan_type ? (
+                                                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-600 capitalize">
+                                                        {l.loan_type}
+                                                    </span>
+                                                ) : <span className="text-zinc-300">—</span>}
+                                            </td>
                                             <td className="px-4 py-3 text-zinc-500">{l.purpose}</td>
                                             <td className="px-4 py-3">
                                                 <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_BADGE[l.status]}`}>

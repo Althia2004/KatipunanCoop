@@ -1,4 +1,4 @@
-import { Head, Link, useForm, router } from '@inertiajs/react';
+﻿import { Head, Link, useForm, router } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     ChevronLeft, Calendar, MapPin, Phone, User, Users, Heart,
@@ -12,7 +12,7 @@ import type {
     RegistrationStatus,
 } from '@/types/member-registration';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface Props {
     registration: MemberRegistration;
@@ -21,7 +21,7 @@ interface Props {
     account_email: string | null;
 }
 
-// ── Status Stepper ───────────────────────────────────────────────────────────
+// â”€â”€ Status Stepper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const STATUS_STEPS: { status: RegistrationStatus; label: string }[] = [
     { status: 'pending',           label: 'Pending' },
@@ -71,7 +71,7 @@ function StatusStepper({ current }: { current: RegistrationStatus }) {
                                     <div className={`flex-1 h-0.5 ${idx === 0 ? 'invisible' : done || active ? 'bg-[#4c9f5f]' : 'bg-zinc-200'}`} />
 
                                     {/* Circle */}
-                                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                                    <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
                                         done   ? 'bg-[#4c9f5f] border-[#4c9f5f] text-white' :
                                         active ? 'bg-white border-[#4c9f5f] text-[#4c9f5f]' :
                                                  'bg-white border-zinc-300 text-zinc-300'
@@ -84,7 +84,7 @@ function StatusStepper({ current }: { current: RegistrationStatus }) {
                                     {/* Right connector */}
                                     <div className={`flex-1 h-0.5 ${idx === STATUS_STEPS.length - 1 ? 'invisible' : done ? 'bg-[#4c9f5f]' : 'bg-zinc-200'}`} />
                                 </div>
-                                <p className={`mt-2 text-[11px] font-semibold text-center leading-tight max-w-[80px] ${
+                                <p className={`mt-2 text-[11px] font-semibold text-center leading-tight max-w-20 ${
                                     active ? 'text-[#2d4734]' : done ? 'text-emerald-600' : 'text-zinc-400'
                                 }`}>
                                     {step.label}
@@ -98,7 +98,7 @@ function StatusStepper({ current }: { current: RegistrationStatus }) {
     );
 }
 
-// ── Detail Section ───────────────────────────────────────────────────────────
+// â”€â”€ Detail Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function DetailCard({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
     return (
@@ -118,14 +118,14 @@ function InfoGrid({ rows }: { rows: { label: string; value: string | null | unde
             {rows.map(({ label, value }) => (
                 <div key={label}>
                     <dt className="text-xs font-bold text-zinc-500 uppercase tracking-wider">{label}</dt>
-                    <dd className="mt-1 text-zinc-900 font-medium">{value || <span className="text-zinc-400 italic">—</span>}</dd>
+                    <dd className="mt-1 text-zinc-900 font-medium">{value || <span className="text-zinc-400 italic">â€”</span>}</dd>
                 </div>
             ))}
         </dl>
     );
 }
 
-// ── Beneficiary Form Modal ────────────────────────────────────────────────────
+// â”€â”€ Beneficiary Form Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function BeneficiaryModal({
     registrationId,
@@ -215,7 +215,7 @@ function BeneficiaryModal({
     );
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
+// â”€â”€ Main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function MemberRegistrationShow({ registration, availableSeminars, has_account, account_email }: Props) {
     const [beneficiaryModal, setBeneficiaryModal] = useState<'add' | Beneficiary | null>(null);
@@ -251,7 +251,7 @@ export default function MemberRegistrationShow({ registration, availableSeminars
 
     return (
         <>
-            <Head title={`Registration — ${registration.first_name} ${registration.last_name}`} />
+            <Head title={`Registration â€” ${registration.first_name} ${registration.last_name}`} />
 
             <div className="p-8 max-w-5xl mx-auto space-y-6">
 
@@ -269,8 +269,8 @@ export default function MemberRegistrationShow({ registration, availableSeminars
                         </h1>
                         <p className="text-zinc-500 font-medium text-sm">
                             Registration #{registration.id}
-                            {registration.registered_by && ` · Encoded by ${registration.registered_by}`}
-                            {' · '}{formatDate(registration.created_at)}
+                            {registration.registered_by && ` Â· Encoded by ${registration.registered_by}`}
+                            {' Â· '}{formatDate(registration.created_at)}
                         </p>
                     </div>
                 </div>
@@ -280,10 +280,10 @@ export default function MemberRegistrationShow({ registration, availableSeminars
 
                 {/* Action Buttons */}
                 <div className="flex flex-wrap gap-3">
-                    {/* Assign Seminar (pending or already scheduled → allow reassign) */}
+                    {/* Assign Seminar (pending or already scheduled â†’ allow reassign) */}
                     {(registration.status === 'pending' || registration.status === 'seminar_scheduled') && (
                         <form onSubmit={handleAssignSeminar} className="flex gap-2 items-center bg-white border border-zinc-200 rounded-xl p-3 shadow-sm flex-wrap">
-                            <BookOpenCheck className="w-4 h-4 text-[#4c9f5f] flex-shrink-0" />
+                            <BookOpenCheck className="w-4 h-4 text-[#4c9f5f] shrink-0" />
                             <select
                                 value={assignForm.data.seminar_id}
                                 onChange={e => assignForm.setData('seminar_id', e.target.value)}
@@ -292,7 +292,7 @@ export default function MemberRegistrationShow({ registration, availableSeminars
                                 <option value="">Select a seminar...</option>
                                 {availableSeminars.map(s => (
                                     <option key={s.id} value={s.id}>
-                                        {s.title} — {formatDateTime(s.scheduled_at)}
+                                        {s.title} â€” {formatDateTime(s.scheduled_at)}
                                     </option>
                                 ))}
                             </select>
@@ -332,7 +332,7 @@ export default function MemberRegistrationShow({ registration, availableSeminars
         {has_account ? (
             <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-700 text-sm font-medium">
                 <CheckCircle2 className="w-5 h-5 shrink-0" />
-                Portal account already created — <span className="font-bold">{account_email}</span>
+                Portal account already created â€” <span className="font-bold">{account_email}</span>
             </div>
         ) : (
             <form onSubmit={handleAssignAccount} className="space-y-4">
@@ -368,7 +368,7 @@ export default function MemberRegistrationShow({ registration, availableSeminars
                     disabled={accountForm.processing}
                     className="px-6 py-2.5 bg-[#2d5a27] text-white font-semibold rounded-xl hover:bg-[#1e3e1a] disabled:opacity-50 transition text-sm"
                 >
-                    {accountForm.processing ? 'Creating…' : 'Create Member Account'}
+                    {accountForm.processing ? 'Creatingâ€¦' : 'Create Member Account'}
                 </button>
             </form>
         )}
@@ -468,7 +468,7 @@ export default function MemberRegistrationShow({ registration, availableSeminars
                             {registration.beneficiaries.map((b, idx) => (
                                 <div key={b.id} className="px-6 py-5 flex items-start justify-between gap-4">
                                     <div className="flex items-start gap-4">
-                                        <div className="w-9 h-9 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-700 font-bold text-sm flex-shrink-0">
+                                        <div className="w-9 h-9 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-700 font-bold text-sm shrink-0">
                                             {b.first_name.charAt(0)}
                                         </div>
                                         <div>
@@ -476,14 +476,14 @@ export default function MemberRegistrationShow({ registration, availableSeminars
                                                 {b.first_name} {b.middle_name ? b.middle_name + ' ' : ''}{b.last_name}
                                             </p>
                                             <p className="text-xs text-zinc-500 mt-0.5">
-                                                {b.relationship} · {b.contact_number}
+                                                {b.relationship} Â· {b.contact_number}
                                             </p>
                                             <p className="text-xs text-zinc-400">
                                                 {b.address_barangay}, {b.address_city}, {b.address_province}
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                    <div className="flex items-center gap-2 shrink-0">
                                         <button
                                             onClick={() => setBeneficiaryModal(b)}
                                             className="p-2 hover:bg-zinc-100 rounded-lg transition text-zinc-400 hover:text-zinc-700"

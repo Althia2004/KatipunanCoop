@@ -65,19 +65,21 @@ class LoanManagementController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'amount'  => ['required', 'numeric', 'min:1'],
-            'term'    => ['required', 'integer', 'min:1'],
-            'purpose' => ['nullable', 'string', 'max:500'],
+            'amount'    => ['required', 'numeric', 'min:1'],
+            'loan_type' => ['required', 'in:regular,emergency,educational,livelihood,housing,agricultural'],
+            'term'      => ['required', 'integer', 'min:1'],
+            'purpose'   => ['nullable', 'string', 'max:500'],
         ]);
 
         LoanRequest::create([
-            'amount'        => $request->input('amount'),
-            'purpose'       => $request->input('purpose'),
-            'term_months'   => $request->input('term'),
-            'requested_by'  => $request->user()->id,
-            'requested_at'  => now()->toDateString(),
-            'status'        => LoanRequest::STATUS_PENDING,
-            'interest_rate' => 1.00,
+            'amount'       => $request->input('amount'),
+            'loan_type'    => $request->input('loan_type'),
+            'purpose'      => $request->input('purpose'),
+            'term_months'  => $request->input('term'),
+            'requested_by' => $request->user()->id,
+            'requested_at' => now()->toDateString(),
+            'status'       => LoanRequest::STATUS_PENDING,
+            'interest_rate' => 1.00, // Default starting rate
         ]);
 
         return redirect()->route('loan.management');
@@ -90,7 +92,7 @@ class LoanManagementController extends Controller
     {
         $user = $request->user();
 
-        abort_unless($user?->isSuperadmin(), 403);
+        abort_unless($user?->isSuperadmin() || $user?->isAdmin(), 403, 'Only admin or superadmin can approve loans.');
         abort_unless($loanRequest->status === LoanRequest::STATUS_PENDING, 403);
 
         $validated = $request->validate([
