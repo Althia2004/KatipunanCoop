@@ -558,3 +558,15 @@ This system was developed for the Katipunan Small Coconut Farmers Multipurpose C
 ## License
 
 This project is for academic and cooperative client testing purposes. Update this section if the repository will use a formal open-source license.
+
+
+## TestAccounts
+
+admin@example.com	
+pass: password
+superadmin@example.com
+pass: password
+09171234567@kscf.local
+Pass : Member@2026
+
+
