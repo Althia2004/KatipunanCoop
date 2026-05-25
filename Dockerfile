@@ -15,10 +15,10 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Configure and install PHP extensions safely
+# Configure and install PHP extensions safely (including iconv)
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-configure intl \
-    && docker-php-ext-install pdo pdo_mysql gd zip bcmath mbstring xml intl ctype
+    && docker-php-ext-install pdo pdo_mysql gd zip bcmath mbstring xml intl ctype iconv
 
 # Get modern Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -26,8 +26,8 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 COPY . .
 
-# Install dependencies optimized for production
-RUN composer install --no-dev --optimize-autoloader
+# Install dependencies optimized for production (ignoring hooks until runtime)
+RUN composer install --no-dev --optimize-autoloader --no-scripts
 
 # Create standard Laravel directories and set write permissions for Nginx
 RUN mkdir -p /var/www/html/storage/framework/{cache,sessions,views} \
