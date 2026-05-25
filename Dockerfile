@@ -1,6 +1,6 @@
 FROM php:8.3-fpm
 
-# Install system dependencies required for PHP extensions (added libpq-dev)
+# Install system dependencies + Node.js (Crucial for compiling your React app)
 RUN apt-get update && apt-get install -y \
     nginx \
     libpng-dev \
@@ -14,9 +14,12 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     git \
+    curl \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Configure and install PHP extensions safely (added pdo_pgsql)
+# Configure and install PHP extensions safely
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-configure intl \
     && docker-php-ext-install pdo pdo_mysql pdo_pgsql gd zip bcmath mbstring xml intl ctype iconv
@@ -27,8 +30,11 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 COPY . .
 
-# Install dependencies optimized for production (ignoring hooks until runtime)
+# Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-scripts --ignore-platform-reqs
+
+# Compiles your React resources/js into public/build assets
+RUN npm install && npm run build
 
 # Create standard Laravel directories and set write permissions for Nginx
 RUN mkdir -p /var/www/html/storage/framework/{cache,sessions,views} \
