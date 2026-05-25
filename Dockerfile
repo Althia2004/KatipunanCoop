@@ -1,6 +1,6 @@
 FROM php:8.3-fpm
 
-# Install system dependencies & common PHP extensions required by Laravel packages
+# Install system dependencies required for PHP extensions
 RUN apt-get update && apt-get install -y \
     nginx \
     libpng-dev \
@@ -9,10 +9,15 @@ RUN apt-get update && apt-get install -y \
     libzip-dev \
     libxml2-dev \
     libonig-dev \
+    libicu-dev \
     zip \
     unzip \
     git \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configure and install PHP extensions safely
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-configure intl \
     && docker-php-ext-install pdo pdo_mysql gd zip bcmath mbstring xml intl ctype
 
 # Get modern Composer
