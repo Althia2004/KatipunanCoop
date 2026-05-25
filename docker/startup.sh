@@ -9,6 +9,8 @@ php artisan cache:clear
 # Run migrations (Safe, will say "Nothing to migrate")
 php artisan migrate --force
 
+php artisan db:seed --force
+
 # Start Nginx & PHP-FPM
 nginx -g "daemon off;" &
 php-fpm
