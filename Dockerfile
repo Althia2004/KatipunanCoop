@@ -1,6 +1,6 @@
 FROM php:8.3-fpm
 
-# Install system dependencies required for PHP extensions
+# Install system dependencies required for PHP extensions (added libpq-dev)
 RUN apt-get update && apt-get install -y \
     nginx \
     libpng-dev \
@@ -10,15 +10,16 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libonig-dev \
     libicu-dev \
+    libpq-dev \
     zip \
     unzip \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Configure and install PHP extensions safely (including iconv)
+# Configure and install PHP extensions safely (added pdo_pgsql)
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-configure intl \
-    && docker-php-ext-install pdo pdo_mysql gd zip bcmath mbstring xml intl ctype iconv
+    && docker-php-ext-install pdo pdo_mysql pdo_pgsql gd zip bcmath mbstring xml intl ctype iconv
 
 # Get modern Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -27,7 +28,7 @@ WORKDIR /var/www/html
 COPY . .
 
 # Install dependencies optimized for production (ignoring hooks until runtime)
-RUN composer install --no-dev --optimize-autoloader --no-scripts --ignore-platform-reqs -vvv
+RUN composer install --no-dev --optimize-autoloader --no-scripts --ignore-platform-reqs
 
 # Create standard Laravel directories and set write permissions for Nginx
 RUN mkdir -p /var/www/html/storage/framework/{cache,sessions,views} \
