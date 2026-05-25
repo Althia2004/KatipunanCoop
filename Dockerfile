@@ -27,7 +27,7 @@ WORKDIR /var/www/html
 COPY . .
 
 # Install dependencies optimized for production (ignoring hooks until runtime)
-RUN composer install --no-dev --optimize-autoloader --no-scripts
+RUN composer install --no-dev --optimize-autoloader --no-scripts --ignore-platform-reqs -vvv
 
 # Create standard Laravel directories and set write permissions for Nginx
 RUN mkdir -p /var/www/html/storage/framework/{cache,sessions,views} \
